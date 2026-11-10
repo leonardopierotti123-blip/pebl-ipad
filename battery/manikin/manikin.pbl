@@ -1,0 +1,329 @@
+#######################################################################
+##
+##  The PEBL Manikin test
+##
+##  A test of 3-D spatial reoreientation.
+##
+##  This test is for demonstration purposes only.
+##  It does not save data and does not have a complete
+##  experimental design.
+##
+## Carter, R., & Woldstad, J. (1985). Repeated measurements of spatial
+## ability with the manikin test. Human Factors: The Journal of the
+## Human Factors and Ergonomics Society, 27(2), 209-219.
+##
+##Damos, D. L. (1986). Development of a Computer-Based Naval Aviation
+##Selection Test Battery. NAVAL AEROSPACE MEDICAL RESEARCH LAB PENSACOLA
+##FL.
+
+## Optimized for 1024x768 minimum screen size.
+
+define Start(p)
+{
+  ## Initialize upload system (works for both online and native)
+  InitializeUpload()
+
+  gWin <- MakeWindow("white")
+  InitializeLSL(gWin)  ## Initialize LSL outlet if --lsl flag was used
+   ##Get subject code if we need to:
+    if(gSubNum+""=="0")
+    {
+	  gSubNum <- GetSubNum(gWin)
+    }
+
+   gFileOut <- GetNewDataFile(gSubNum,gWin,"manikin","csv",
+        "subnum,block,trial,target,targetname,forback,updown,hand,handname,resp,time1,rt,corr")
+
+  ## Load parameters
+  parpairs <- [["numBlocks", 3],
+               ["zoom",.6],
+	       ["iti",750],
+               ["responsemode","auto"]]  ##Response mode for Layout & Response System
+  gParams <- CreateParameters(parpairs, gParamFile)
+  gParams.responsesemantics <- "2afc"
+
+  numBlocks <- gParams.numBlocks
+  conditions <- [
+  [1,1,1,1],
+  [1,1,-1,1],
+  [1,-1,1,1],
+  [1,-1,-1,1],
+  [-1,1,1,1],
+  [-1,1,-1,1],
+  [-1,-1,1,1],
+  [-1,-1,-1,1],
+  [1,1,1,-1],
+  [1,1,-1,-1],
+  [1,-1,1,-1],
+  [1,-1,-1,-1],
+  [-1,1,1,-1],
+  [-1,1,-1,-1],
+  [-1,-1,1,-1],
+  [-1,-1,-1,-1]]
+  
+
+  Draw()
+  GetStrings(gLanguage)
+
+  ## Create layout with response system
+  gLayout <- CreateLayout("manikin", gWin, gParams)
+  gLayout.header.visible <- 1
+  gLayout.subheader.visible <- 0
+  gLayout.footer.text <- gStrings.footer
+
+  ## Calculate scale factor based on stimulus region
+  ## Manikin images are ~417x1024 pixels
+  ## At default zoom 0.6: width=250px, height=614px
+  ## Background shapes: square 400px, circle diameter 400px
+  ## Total composition at zoom 0.6: ~400 wide x 614 high
+
+  ## Define target dimensions at default zoom (gParams.zoom = 0.6)
+  baseWidth <- 400   ## Background square size
+  baseHeight <- 614  ## Manikin height at zoom 0.6
+
+  ## Available space (with small margins)
+  maxWidth <- gLayout.stimulusRegion.width - 10
+  maxHeight <- gLayout.stimulusRegion.height - 10
+
+  ## Constrain to available space
+  fittedWidth <- Min([baseWidth, maxWidth])
+  fittedHeight <- Min([baseHeight, maxHeight])
+
+  ## Calculate scale factor: how much we need to shrink from base size
+  gScaleFactor <- Min([fittedWidth / baseWidth, fittedHeight / baseHeight])
+
+  gFront <- MakeImage("images/forward1.png")
+  gBack <- MakeImage("images/back1.png")
+  AddObject(gFront,gWin)
+  AddObject(gBack,gWin)
+  ## Position in stimulus region center
+  Move(gFront,gLayout.centerX,gLayout.centerY)
+  Move(gBack,gLayout.centerX,gLayout.centerY)
+  Hide(gFront)
+  Hide(gBack)
+  ## Apply combined zoom: parameter zoom * stimulus region scale
+  gFront.zoomX <- gParams.zoom * gScaleFactor
+  gFront.zoomY <- gParams.zoom * gScaleFactor
+  gBack.zoomX <- gParams.zoom * gScaleFactor
+  gBack.zoomY <- gParams.zoom * gScaleFactor
+
+  PracticeScreen("manikin1.png",gStrings.inst1,"any",300)
+  PracticeScreen("manikin-inst1.png",gStrings.prac1,"any")
+  PracticeScreen("manikin-inst2.png",gStrings.prac2,"right")
+  PracticeScreen("manikin-inst3.png",gStrings.prac3,"right")
+  PracticeScreen("manikin-inst4.png",gStrings.prac4,"left")
+  PracticeScreen("manikin1.png",gStrings.ready,"any",300)
+
+  trialnum <- 1
+
+ Draw()
+ Wait(1000)
+
+
+   block <- "PRACTICE"
+   LSLMarker("block_practice_start")
+   trials <- SubList(Shuffle(conditions),1,8)
+   loop(trial,trials)
+    {
+      LSLMarker("trial_" + trialnum + "_start")
+
+      Draw()
+      Wait(200)
+      Draw()
+     gLayout.header.text <-  ReplaceChar(ReplaceChar(gStrings.pheader,"<X>", trialnum),"<Y>",Length(trials))
+     trialTime <- GetTime()
+     out <-  Trial(First(trial),Second(trial),Third(trial),Fourth(trial))
+     line <- ConcatenateList(Merge([gSubnum,block,trialnum],out),",")
+     Print(line)
+     FilePrint(gFileOut,line)
+     if(Last(out) == 0)
+     {
+       gLayout.subheader.text <- gstrings.incorrect
+
+     } else{
+       gLayout.subheader.text <- gstrings.correct
+     }
+      gLayout.subheader.visible <- 1
+      Draw()
+      Wait(gParams.iti)
+      gLayout.subheader.visible <- 0
+      gLayout.header.text <- ""
+      trialnum <- trialnum +1
+     }
+   LSLMarker("block_practice_end")
+
+ numtrials <- gParams.numblocks*16
+ ready <- ReplaceChar(gStrings.ready2,"<N>",numtrials)
+ PracticeScreen("",ready,"any",300)
+
+
+  accs <- []
+  rts <- []
+  trialnum <- 1
+ loop(block,gParams.numBlocks)
+  {
+   LSLMarker("block_" + block + "_start")
+   trials <- Shuffle(conditions)
+   loop(trial,trials)
+    {
+      LSLMarker("trial_" + trialnum + "_start")
+      gLayout.header.text <-  ReplaceChar(ReplaceChar(gStrings.header,"<X>", trialnum),"<Y>",16*gparams.numBlocks)
+      Draw()
+      Wait(200)
+      Draw()
+     trialTime <- GetTime()
+      out <-  Trial(First(trial),Second(trial),Third(trial),Fourth(trial))
+     line <- ConcatenateList(Merge([gSubnum,block,trialnum],out),",")
+
+     FilePrint(gFileOut,line)
+      PushOnEnd(rts,Nth(out,9))
+      PushOnEnd(accs,Last(out))
+
+      trialnum <- trialnum+ 1
+     }
+   LSLMarker("block_" + block + "_end")
+}
+
+
+  meanRT <- Round(Mean(rts))
+  meanAcc <- Round(Mean(accs)*100)
+  debrief <-"Accuracy: "+ meanACC + "%" + CR() + "Mean time to respond: " + (meanRT/1000) + " secs" + CR() +  gStrings.debrief
+  gLayout.header.visible <- 0
+  gLayout.footer.visible <- 0
+
+  ## Close and upload data file
+  FileClose(gFileOut)
+  datafile <- "data/" + gSubNum + "/manikin-" + gSubNum + ".csv"
+  UploadFile(gSubNum, datafile)
+
+  ## Finalize LSL
+  FinalizeLSL()
+
+  ##do debriefing
+  PracticeScreen("manikin1.png",debrief,"any",400)
+
+}
+
+
+## This displays a trial in which you must specify:
+## target (green circle/red square) that surrounds image
+## dummy facing forward/backward
+## dummy oriented up/down
+## which hand the correct target is in. (1=left, 2=right)
+## 
+
+define Trial(target, forback, updown, hand)
+{
+
+   handname <- Lookup(hand,[-1,1],["right","left"])
+
+   ## Use layout center for positioning
+   xx <- gLayout.centerX
+   yy <- gLayout.centerY
+
+   ## Scale all sizes by gScaleFactor
+   if(target == 1)
+   {
+     bg <-   Square(xx,yy,400*gScaleFactor,MakeColor("red2"),1)
+     targ <- Square(xx,yy,45*gScaleFactor,MakeColor("red2"),1)
+     foil  <- Circle(xx,yy,25*gScaleFactor,MakeColor("darkgreen"),1)
+     targname <- "redsquare"
+   } else{
+
+     bg <- Circle(xx,yy,200*gScaleFactor,MakeColor("darkgreen"),1)
+     targ  <- Circle(xx,yy,25*gScaleFactor,MakeColor("darkgreen"),1)
+     foil <- Square(xx,yy,45*gScaleFactor,MakeColor("red2"),1)
+     targname <- "greencircle"
+   }
+
+   if(forback==1)
+     {
+         img <- gFront
+     }else {
+         img <- gBack
+     }
+
+   if(updown == 1)
+     {
+         #do nothing
+         img.rotation <- 0
+     }else{
+         img.rotation <- 180
+
+     }
+
+
+    targpos <- forback * updown * hand
+    foilpos <- forback * updown * (-hand)
+
+    ## Scale hand offsets by gScaleFactor (combined with zoom already applied to manikin)
+    ## Offsets are relative to the already-zoomed manikin size
+    targ.x <- xx + targpos*100*gParams.zoom*gScaleFactor
+    targ.y <- yy + updown*50*gParams.zoom*gScaleFactor
+
+    foil.x <- xx + foilpos*100*gParams.zoom*gScaleFactor
+    foil.y <- yy + updown*50*gParams.zoom*gScaleFactor
+
+    AddObject(bg,gWin)
+
+    AddObject(img,gWin)
+    AddObject(targ,gWin)
+    AddObject(foil,gWin)
+    Show(img)
+    time1 <- GetTime()
+    LSLMarker("stimulus_present")
+    Draw()
+    resp <-  WaitForLayoutResponse(gLayout)
+    time2 <- GetTime()
+    corr <- (resp=="right" and hand== -1) or (resp=="left" and hand==1)
+    LSLMarker("response_" + resp + "_corr" + corr)
+
+
+    Hide(img)
+   out <- [target, targname, forback, updown, hand,handname,resp,time1,(time2-time1),corr]
+   return out
+}
+
+
+
+define GetStrings(lang)
+{
+  gStrings <- GetTranslations("manikin", lang)
+}
+
+
+define PracticeScreen(image,text,correctResponse,imagewidth:1000)
+{
+
+   targwidth <- imagewidth
+
+   tb <- AdaptiveTextBox(text,gVideoWidth/2-400,75,gWin,20,800,250,"scalefont")
+   if(image != "")
+   {
+    img <- MakeImage("images/"+image)
+    AddObject(img,gWin)
+    img.zoomX <- targwidth/img.width
+    img.zoomY <- img.zoomX
+    Move(img,gLayout.centerx,gLayout.centery)
+  }
+
+   Draw()
+
+   ## Wait for correct response (or any response if correctResponse == "any")
+   if(correctResponse == "any")
+   {
+     WaitForLayoutResponse(gLayout)  ## Use layout response system for consistency
+   } else {
+     resp <- ""
+     while(resp != correctResponse)
+     {
+       resp <- WaitForLayoutResponse(gLayout)
+     }
+   }
+
+   RemoveObject(tb,gWin)
+   if(image != "")
+   {
+     RemoveObject(img,gWin)
+   }
+}

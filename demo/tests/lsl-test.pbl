@@ -1,0 +1,49 @@
+## lsl-test.pbl -- Lab Streaming Layer diagnostic test
+## Uses InitializeLSL/LSLMarker/FinalizeLSL wrappers (same as battery tasks)
+##
+## Run from command line:
+##   bin/pebl2 demo/tests/lsl-test.pbl --lsl PEBL-test
+##
+## Without --lsl flag, LSL is skipped (no-op). With flag, shows LabRecorder
+## waiting screen then sends markers.
+
+define Start(p)
+{
+    gWin <- MakeWindow("black")
+
+    Print("===== LSL Test =====")
+    Print("gLSLEnabled: " + gLSLEnabled)
+    Print("gLSLStreamName: " + gLSLStreamName)
+    Print("LSL clock at start: " + LSLLocalClock())
+    Print("")
+
+    ## Use same initialization path as battery tasks
+    success <- InitializeLSL(gWin)
+    Print("InitializeLSL returned: " + success)
+    Print("LSLHasConsumers: " + LSLHasConsumers())
+    Print("")
+
+    ## Send string markers
+    loop(m, List("trial-start", "stim-on", "response", "trial-end"))
+    {
+        t <- LSLLocalClock()
+        LSLMarker(m)
+        Print("  [" + t + "] LSLMarker(" + m + ")")
+        Wait(250)
+    }
+
+    ## Send integer markers
+    loop(i, Sequence(1, 5, 1))
+    {
+        t <- LSLLocalClock()
+        LSLMarker(i)
+        Print("  [" + t + "] LSLMarker(" + i + ")")
+        Wait(250)
+    }
+
+    Print("")
+    Print("LSL clock at end: " + LSLLocalClock())
+    FinalizeLSL()
+    Print("===== LSL Test Complete =====")
+    return(0)
+}

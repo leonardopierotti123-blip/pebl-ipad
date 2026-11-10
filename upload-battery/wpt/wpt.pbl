@@ -1,0 +1,409 @@
+##
+## see Knowlton et al, 1994
+##
+##http://learnmem.cshlp.org/content/1/2/106.full.pdf+html
+
+define Start(p)
+{
+  gScriptName <- "PEBL Weather Prediction Task"
+
+  parpairs <- [["numtrials",350],
+               ["startpoints",600],
+	       ["maxpoints",1000],
+	       ["blocksize",50],
+               ["responsemode","auto"]  ##Response mode for Layout & Response System
+              ]
+
+
+  gParams <- CreateParameters(parpairs,gParamFile)
+  gParams.responsesemantics <- "2afc"  ## Two-alternative forced choice (Rain vs Sun prediction)
+
+  numtrials <- gParams.numtrials
+
+  gWin <- MakeWindow("white")
+  InitializeLSL(gWin)  ## Initialize LSL outlet if --lsl flag was used
+  InitializeUpload()  ## Initialize token-based hosting if upload.json exists
+
+  gSleepEasy <- 1
+  if(gSubNum+""=="0")
+  {
+   gSubNum <- GetSubNum(gWin)
+  }
+
+  GetStrings(gLanguage)
+
+  ## Set response labels BEFORE CreateLayout so borders are sized correctly
+  ## For touchtarget mode, add "Tap for" prefix (translated)
+  if(gParams.responsemode == "touchtarget")
+  {
+    gParams.responselabels <- [gStrings.tap_for + " " + gStrings.footerL, gStrings.tap_for + " " + gStrings.footerR]
+  } else {
+    gParams.responselabels <- [gStrings.footerL, gStrings.footerR]
+  }
+
+  ## Create layout with response system AFTER GetSubNum
+  gLayout <- CreateLayout("wpt", gWin, gParams)
+  gLayout.header.visible <- 0
+  gLayout.subheader.visible <- 1
+
+  gFileOut <- GetNewDataFile(gSubNum,gWin,"wpt","csv","subnum,trial,config,c1,c2,c3,c4,sampleprob,rainprob,prob2,time,rt,resp,outcome,correct")
+
+
+#Table 2.
+#Cue Probabilities
+#P(Sun|cue present) P(Rain|cue present)
+#Cue 4 (squares) .756 .244
+#Cue 3 (diamonds) .575 .425
+#Cue 2 (circles) .425 .575
+#Cue 1 (triangles) .244 .756
+
+##Table 3.
+##Probability Structure of the Task
+##Pattern Cue 1 Cue 2 Cue 3 Cue 4 P(pattern) P(rain|pattern)
+
+stimtable <- [["A", 0,0,0,1,0.14, 0.15],
+              ["B" ,0,0,1,0, 0.084, 0.38],
+              ["C", 0,0,1,1, 0.087, 0.10],
+              ["D", 0,1,0,0, 0.084, 0.62],
+	      ["E", 0,1,0,1, 0.064, 0.18],
+	      ["F", 0,1,1,0, 0.047, 0.50],
+	      ["G", 0,1,1,1, 0.041, 0.21],
+	      ["H", 1,0,0,0, 0.14, 0.85],
+	      ["I", 1,0,0,1, 0.058, 0.50],
+	      ["J", 1,0,1,0, 0.064, 0.82],
+	      ["K", 1,0,1,1, 0.032, 0.43],
+	      ["L", 1,1,0,0, 0.087, 0.90],
+	      ["M", 1,1,0,1, 0.032, 0.57],
+	      ["N", 1,1,1,0, 0.041, 0.79]]
+
+
+##               ["triangleprob",0.244],##prob of sun given triangle
+##               ["circleprob",0.424],##prob of sun given circle
+##               ["squareprob",0.575],##prob of sun given square
+##               ["diamondprob",0.756]##prob of sun given diamond
+
+##probs <- [gParams.triangleprob,gParams.circleprob,gParams.diamondprob,gParams.squareprob]
+   ## Position grey rectangle in stimulus region center
+   rect <- Rectangle(gLayout.centerX,gLayout.centerY,800,300,MakeColor("grey"),0)
+   AddObject(rect,gWin)
+
+
+ gCards <- [MakeImage("imgs/card1.png"),
+             MakeImage("imgs/card2.png"),
+	     MakeImage("imgs/card3.png"),
+	     MakeImage("imgs/card4.png")]
+  ## Position cards centered in stimulus region
+  x <- gLayout.centerX-300
+  loop(i,gCards)
+   {
+      AddObject(i,gWin)
+      Move(i,x,gLayout.centerY)
+      x <- x + 200
+   }
+
+
+
+
+  gSmiley <- MakeImage("smiley-big.png")
+  gFrowney <- MakeImage("frowney-big.png")
+  AddObject(gSmiley,gWin)
+  AddObject(gFrowney,gWin)
+
+  Move(gSmiley,gLayout.centerX,gLayout.centerY)
+  Move(gFrowney,gLayout.centerX,gLayout.centerY)
+  Hide(gSmiley)
+  Hide(gFrowney)
+
+
+  value <- gParams.startpoints
+  ## Position graph to the right of stimulus region
+  graphX <- gLayout.stimulusRegion.x + gLayout.stimulusRegion.width - 80
+  graph <- MakeGraph(value,gParams.maxpoints,graphX,gLayout.centerY,gStrings.earnings,10)
+
+
+   ##Instructions here - use AdaptiveTextBox
+  inst <- AdaptiveTextBox(gStrings.inst,
+                         20,
+                         20,
+                         gWin, 20,
+                         gVideoWidth - 40,
+                         200,
+                         "scalefont")
+
+  gLayout.footer.visible <- 1
+  ShowAll(gCards,1)
+  Draw()
+  WaitForLayoutResponse(gLayout)
+
+  ShowAll(gCards,0)
+  Hide(inst)
+  Draw()
+
+  ## Show cursor only for mousetarget mode (need to click on targets)
+  ## Hide cursor for keyboard, mousebutton, and touchtarget modes
+  if(gParams.responsemode == "mousetarget")
+  {
+    ShowCursor(1)
+  } else {
+    ShowCursor(0)
+  }
+
+
+
+  stimdist <- Nth(Transpose(stimtable),6)
+  stims <- Shuffle(SampleDistribution(Sequence(1,14,1),stimdist,numtrials))
+
+
+  trial <- 1
+  LSLMarker("block_test_start")
+  loop(i,stims)
+   {
+    line <- Nth(stimtable,i)
+    LSLMarker("trial_" + trial + "_config" + First(line) + "_start")
+    out <-     Trial(SubList(line,2,5),Nth(line,7))
+    LSLMarker("trial_response_" + Nth(out,4) + "_correct" + Nth(out,6))
+
+    FilePrint(gfileout,ConcatenateList(Flatten([[gSubNum,trial],line,out]),","))
+
+    if(Nth(out,6)==1)
+    {
+      delta <- 1
+    }else {
+      delta <- -1
+    }
+    value <- value + delta
+    UpdateGraph(graph, value, gparams.maxpoints)
+
+   if(Mod(trial,gParams.blocksize)==0)
+   {
+     inst.text <- gStrings.break
+     Show(inst)
+     Draw()
+     WaitForLayoutResponse(gLayout)
+     Hide(inst)
+     Draw()
+   }
+
+   trial <- trial + 1
+
+   }
+  LSLMarker("block_test_end")
+
+  ## Finalize LSL
+  FinalizeLSL()
+
+   FileClose(gFileOut)
+
+   ##Upload data files
+   Print("Uploading data files...")
+   out <- UploadFile(gSubNum, gFileOut.filename); Print(out)
+
+   inst.text <- gStrings.debrief
+   Show(inst)
+   Draw()
+   WaitForLayoutResponse(gLayout)
+}
+
+define Trial(cards,prob)
+{
+
+
+   loop(i,[1,2,3,4])
+   {
+   if(Nth(cards,i))
+    {
+      Show(Nth(gCards,i))
+    }
+   }
+
+
+  Draw()
+  time1 <- GetTime()
+  resp <-   WaitForLayoutResponse(gLayout, 10000)
+  time2 <- GetTime()
+
+  actual <- ( RandomUniform(1) < prob )
+
+  ##actual==1 == RAIN, resp=="left" means RAIN prediction
+  if(actual == 1)
+   {
+    correct <- (resp == "left")
+   }  else   {
+    correct <- (resp == "right")
+   }
+
+  HideAll(gcards)
+  Draw()
+
+  if(correct)
+   {
+    Show(gSmiley)
+    Draw()
+    Wait(500)
+    Hide(gSmiley)
+
+   } else {
+    Show(gFrowney)
+    Draw()
+    Wait(1000)
+    Hide(gFrowney)
+
+  }
+  Draw()
+  Wait(500)
+
+return [prob, time1, (time2-time1),resp,actual,correct]
+}
+
+
+define HideAll(obs)
+{
+   loop(i,obs)
+   {
+     Hide(i)
+   }
+}
+
+
+define SampleDistribution(elements, probabilities, number)
+{
+##the probabilities need to add up to 1.0.
+
+
+  cumdist <- []
+  sum <- 0
+  loop(i,probabilities)
+   {
+   sum <- sum + i
+    PushOnEnd(cumdist,sum)
+   }
+
+    out <- []
+    length <- 0
+    while(length < number)
+    {
+      PushOnEnd(out, Nth(elements,SampleDist(cumdist)))
+      length <- length + 1
+    }
+
+ return out
+}
+
+define SampleDist(cumdist)
+{
+   prob <- RandomUniform(1)
+   i <- 1
+   while( prob >= Nth(cumdist,i))
+    {
+
+      i <- i + 1
+    }
+
+  return i
+}
+
+
+define ShowAll(list,onoff)
+{
+   loop(i,list)
+   {
+     i.visible <- onoff
+   }
+
+}
+
+
+
+define MakeGraph(value,total,x,y,label,numticks)
+{
+
+    mygraph <- MakeCustomObject("graph")
+
+
+    ##Sets up some basic parameters for plotting the graph at the bottom of the screen
+    font <- MakeFont(gPEBLBaseFont,0,12,MakeColor("black"),MakeColor("white"),0)
+    mygraph.height <- 400
+    dataheight <- value/total * mygraph.height
+    mygraph.width  <- 30
+    scale <- mygraph.height/total      ##pixels/unit
+
+    ycenter <- y
+    xcenter <- x
+
+
+    bgcol <- MakeColor("grey70")
+#    fgcol <- MakeColor("red")
+    fgcol <- MakeColorRGB(200,0,0)
+    black <- MakeColor("grey20")
+
+
+    #Create rectangle for background and for data
+    myGraph.back <- Rectangle(xcenter-5,ycenter, 80, mygraph.height+50, bgcol, 0)
+    myGraph.databar <- Rectangle(xcenter+5,ycenter + mygraph.height/2 - dataheight/2,
+                                  mygraph.width, dataheight, fgcol, 1)
+    databar <- myGraph.databar
+    myGraph.lab <- MakeLabel(label,font)
+    Move(myGraph.lab,xcenter, ycenter+mygraph.height/2+14)
+
+
+    AddObject(myGraph.back,gWin)
+    AddObject(myGraph.databar,gWin)
+    AddObject(myGraph.lab,gWin)
+
+    ##Create all the labels, based on yvals. Add each label to the
+    ##appropriate location, and combine them all into a single
+    ##composite to make removal easier.
+    ##These labels are all re-created each trial--they could be
+    ##static, which would be a little more efficient, but it is really
+    ##fast as is.
+
+
+    composite <-[]
+
+     yvals <- Sequence(0, total, total/numticks)
+     mygraph.bottom <- Floor(ycenter + mygraph.height/2)
+     loop(i,yvals)
+      {
+        yy <- MakeLabel(i+"", font)
+        AddObject(yy,gWin)
+        Move(yy,  xcenter-25, mygraph.bottom - i*scale)
+        Show(yy)
+        composite <- Append(composite,yy)
+
+	tick <- Line((databar.x - databar.width/2),
+                      ycenter+mygraph.height/2-i*scale,
+                      mygraph.width,0,black)
+        AddObject(tick,gWin)
+        composite <- Append(composite,tick)
+
+      }
+    Draw()
+
+    myGraph.xcenter <- xcenter
+    myGraph.ycenter <- ycenter
+    myGraph.composite <- composite
+    return myGraph
+}
+
+define UpdateGraph(myGraph, value, total)
+{
+
+    ##Sets up some basic parameters for plotting the graph at the bottom of the screen
+
+    dataheight <- value/total * mygraph.height
+
+    #Extract the data from graph.
+    data <- myGraph.databar
+    databottom <- mygraph.bottom
+
+    data.height <- dataheight
+    data.y <- Floor(databottom-data.height/2)
+
+}
+
+
+
+define GetStrings(lang)
+{
+  gStrings <- GetTranslations("wpt", lang)
+}

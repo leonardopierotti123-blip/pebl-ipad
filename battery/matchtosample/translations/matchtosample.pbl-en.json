@@ -1,0 +1,8 @@
+{
+"HEADER": "Match To Sample",
+"INST1": "During the course of this experiment, you will see a single matrix filled with red and yellow squares, followed by a pair of matrices. Your task is to decide which of the matrices in the pair match the single matrix you were shown first.  At the start of a trial you will see a single matrix made up of red and yellow cells. This is the sample matrix for the trial. You should do your best to memorize the pattern of red and yellow squares in this matrix.  After a short pause, you will then see two comparison matrices on the screen, side by side. One of these two matrices will be identical to the sample matrix that was on the screen, and the other matrix will differ slightly.  Your task is to determine which of the two comparison matrices is the one which matches the sample matrix. Use the responses indicated below to choose the left or right matrix. You should try to decide which matrix matches the sample one as quickly as you can while still being accurate.\n\n\nPress any key to begin",
+"HEAD1": "Press any key to view test matrix",
+"CORRECT": "Correct",
+"INCORRECT": "Incorrect",
+"DEBRIEF": "Thank you for participating. Press any key to continue."
+}

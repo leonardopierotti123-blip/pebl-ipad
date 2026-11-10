@@ -1,0 +1,13 @@
+{
+"DEBRIEF": "Hvala vam na sudjelovanju ",
+"INST1": "U ovom zadatku vidjet ćete niz slova '<TARG>' i '<FOIL>' koja se pojavljuju u mreži. Odgovorite SAMO kada vidite '<TARG>'. NE ODGOVARAJTE kada vidite '<FOIL>'. Većina slova bit će '<TARG>'. Ispod možete vidjeti stimulanse <TARG> i <FOIL>, ali u pravom testu slovo može biti ispod bilo koje od četiri zvijezde. Započet ćete s probnim pokušajima gdje ćete dobiti povratnu informaciju o greškama. Kada ste spremni, pritisnite tipku ili gumb za odgovor prikazan ispod da započnete vježbu.",
+"INST2": "Sada ćete započeti s zadatkom zaista. Više nećete dobiti informaciju kada ste pogriješili. Pritisnite bilo koju tipku za početak sljedećeg bloka.",
+"INST3": "Možete se malo odmoriti prije nego li nastavite. U drugom dijelu ovog istraživanja mapiranje će se preokrenuti. Ovaj put odgovorite SAMO za '<FOIL>', ali NE za '<TARG>'. Započet ćete s probnim pokušajima. Pritisnite bilo koju tipku za početak vježbe.",
+"LANGUAGE": "hr",
+"METHOD": "Odgovorite (kliknite ili pritisnite tipku) za ",
+"HEADER_RESPOND_ONLY": "Odgovorite SAMO za <TARG>",
+"AUTHOR": "Silvija Rucevic",
+"CUE_RESPOND": "ODGOVORITI",
+"CUE_DONT_RESPOND": "NE ODGOVARATI",
+"TRIAL_COUNTER": "Pokušaj <NUM> od <NUMTRIALS>"
+}

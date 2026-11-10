@@ -1,0 +1,1243 @@
+{
+  "version": "1.0",
+  "description": "PEBL Bundle Build Configuration - defines all data bundles to be created",
+  "_comment": [
+    "BUNDLE TYPES:",
+    "",
+    "1. CORE RUNTIME (pebl2.data) - NOT DEFINED HERE",
+    "   - Created by Makefile during 'make em-opt' via --preload-file flags",
+    "   - Contains: emscripten/pebl-lib/*.pbl and emscripten/media/*",
+    "   - Size: ~3MB (fonts, images, sounds, standard library)",
+    "   - Always loaded automatically with pebl2.js",
+    "   - DO NOT recreate this as a bundle - it's already embedded in the main build",
+    "",
+    "2. BATTERY BUNDLES (core-battery.data)",
+    "   - Curated collections of tests for specific purposes",
+    "   - Uses 'manifest' field to specify which tests to include from upload-battery/",
+    "   - May be auto-loaded by default for all users",
+    "   - Example: core-battery includes ~44 standard tests",
+    "",
+    "3. INDIVIDUAL TEST BUNDLES (test-bundles/*.data)",
+    "   - Single tests or small test collections that are large or specialized",
+    "   - Loaded on-demand when user runs that specific test",
+    "   - Stored in bin/test-bundles/ directory",
+    "   - Examples: pcst (5.5MB with audio), bcst-64, simon, TNT, luckvogel",
+    "",
+    "4. PRIVATE/RESTRICTED BUNDLES (private_uploads.data)",
+    "   - Tests requiring individual access grants",
+    "   - Stored in bin/ (not test-bundles/)",
+    "   - Loaded only for authorized users",
+    "   - Example: private_uploads contains MRT and spatialgrid"
+  ],
+  "bundles": {
+    "core_battery": {
+      "name": "core-battery",
+      "type": "battery_bundle",
+      "description": "Standard PEBL test battery (curated tests from upload-battery)",
+      "output_dir": "bin",
+      "manifest": "core-battery-manifest.json",
+      "includes": [
+        {
+          "path": "upload-battery",
+          "mount": "/usr/local/share/pebl2/battery",
+          "description": "Standard test battery"
+        }
+      ],
+      "excludes": [
+        "*/data/*",
+        "*/.git/*",
+        "*~",
+        "*.config",
+        "*.pbl.png"
+      ],
+      "options": {
+        "use_preload_cache": true,
+        "separate_metadata": true,
+        "lz4": false
+      }
+    },
+    "test_bundles": [
+      {
+        "name": "affectgrid",
+        "type": "test_bundle",
+        "description": "PEBL Affect Grid - Self-report emotional state assessment",
+        "output_dir": "bin/test-bundles",
+        "includes": [
+          {
+            "path": "upload-battery/affectgrid",
+            "mount": "/usr/local/share/pebl2/battery/affectgrid",
+            "description": "Affect Grid test with 7 translations"
+          }
+        ],
+        "excludes": [
+          "*/data/*",
+          "*~",
+          "*.pbl.png"
+        ],
+        "options": {
+          "use_preload_cache": true,
+          "separate_metadata": true,
+          "lz4": false
+        },
+        "size_mb": 0.1,
+        "catalog_entry": {
+          "base_url": "/runtime/test-bundles",
+          "tests": [
+            "affectgrid"
+          ]
+        }
+      },
+      {
+        "name": "pcst",
+        "type": "test_bundle",
+        "description": "PEBL Cognitive Screening Test with audio instruction files",
+        "output_dir": "bin/test-bundles",
+        "includes": [
+          {
+            "path": "battery/PCST",
+            "mount": "/usr/local/share/pebl2/battery/PCST",
+            "description": "PCST test files including audio"
+          }
+        ],
+        "excludes": [
+          "*/data/*",
+          "*~"
+        ],
+        "options": {
+          "use_preload_cache": true,
+          "separate_metadata": true,
+          "lz4": false
+        },
+        "size_mb": 5.5,
+        "catalog_entry": {
+          "base_url": "/runtime/test-bundles",
+          "tests": [
+            "pcst"
+          ]
+        }
+      },
+      {
+        "name": "bcst-64",
+        "type": "test_bundle",
+        "description": "Berg Card Sort Test - 64 card version with stimulus images",
+        "output_dir": "bin/test-bundles",
+        "includes": [
+          {
+            "path": "upload-battery/bcst-64",
+            "mount": "/usr/local/share/pebl2/battery/bcst-64",
+            "description": "BCST-64 test files including card images"
+          }
+        ],
+        "excludes": [
+          "*/data/*",
+          "*~",
+          "*.pbl.png"
+        ],
+        "options": {
+          "use_preload_cache": true,
+          "separate_metadata": true,
+          "lz4": false
+        },
+        "size_mb": 0.6,
+        "catalog_entry": {
+          "base_url": "/runtime/test-bundles",
+          "tests": [
+            "bcst-64"
+          ]
+        }
+      },
+      {
+        "name": "simon",
+        "type": "test_bundle",
+        "description": "Simon Task - Spatial stimulus-response compatibility test",
+        "output_dir": "bin/test-bundles",
+        "includes": [
+          {
+            "path": "upload-battery/simon",
+            "mount": "/usr/local/share/pebl2/battery/simon",
+            "description": "Simon task test files"
+          }
+        ],
+        "excludes": [
+          "*/data/*",
+          "*~",
+          "*.pbl.png"
+        ],
+        "options": {
+          "use_preload_cache": true,
+          "separate_metadata": true,
+          "lz4": false
+        },
+        "size_mb": 0.1,
+        "catalog_entry": {
+          "base_url": "/runtime/test-bundles",
+          "tests": [
+            "simon"
+          ]
+        }
+      },
+      {
+        "name": "TNT",
+        "type": "test_bundle",
+        "description": "Toulouse N-back Task - Working memory test with 0/1/2-back conditions",
+        "output_dir": "bin/test-bundles",
+        "includes": [
+          {
+            "path": "upload-battery/TNT",
+            "mount": "/usr/local/share/pebl2/battery/TNT",
+            "description": "TNT test files"
+          }
+        ],
+        "excludes": [
+          "*/data/*",
+          "*~",
+          "*.pbl.png"
+        ],
+        "options": {
+          "use_preload_cache": true,
+          "separate_metadata": true,
+          "lz4": false
+        },
+        "size_mb": 0.1,
+        "catalog_entry": {
+          "base_url": "/runtime/test-bundles",
+          "tests": [
+            "TNT"
+          ]
+        }
+      },
+      {
+        "name": "luckvogel",
+        "type": "test_bundle",
+        "description": "Luck & Vogel Visual Change Detection - Visual working memory capacity test",
+        "output_dir": "bin/test-bundles",
+        "includes": [
+          {
+            "path": "upload-battery/luckvogel",
+            "mount": "/usr/local/share/pebl2/battery/luckvogel",
+            "description": "Luck & Vogel test files"
+          }
+        ],
+        "excludes": [
+          "*/data/*",
+          "*~",
+          "*.pbl.png"
+        ],
+        "options": {
+          "use_preload_cache": true,
+          "separate_metadata": true,
+          "lz4": false
+        },
+        "size_mb": 0.1,
+        "catalog_entry": {
+          "base_url": "/runtime/test-bundles",
+          "tests": [
+            "luckvogel"
+          ]
+        }
+      },
+      {
+        "name": "maze",
+        "type": "test_bundle",
+        "description": "PEBL maze-solving task. Tests visual-spatial planning and problem solving",
+        "output_dir": "bin/test-bundles",
+        "includes": [
+          {
+            "path": "upload-battery/maze",
+            "mount": "/usr/local/share/pebl2/battery/maze",
+            "description": "Maze Solving Task test files"
+          }
+        ],
+        "excludes": [
+          "*/data/*",
+          "*~",
+          "*.pbl.png"
+        ],
+        "options": {
+          "use_preload_cache": true,
+          "separate_metadata": true,
+          "lz4": false
+        },
+        "size_mb": 0.1,
+        "catalog_entry": {
+          "base_url": "/runtime/test-bundles",
+          "tests": [
+            "maze"
+          ]
+        }
+      },
+      {
+        "name": "matrixrotation",
+        "type": "test_bundle",
+        "description": "Matrix Rotation - Mental imagery task for spatial rotation ability",
+        "output_dir": "bin/test-bundles",
+        "includes": [
+          {
+            "path": "upload-battery/matrixrotation",
+            "mount": "/usr/local/share/pebl2/battery/matrixrotation",
+            "description": "Matrix Rotation test files"
+          }
+        ],
+        "excludes": [
+          "*/data/*",
+          "*~",
+          "*.pbl.png"
+        ],
+        "options": {
+          "use_preload_cache": true,
+          "separate_metadata": true,
+          "lz4": false
+        },
+        "size_mb": 0.1,
+        "catalog_entry": {
+          "base_url": "/runtime/test-bundles",
+          "tests": [
+            "matrixrotation"
+          ]
+        }
+      },
+      {
+        "name": "globallocal",
+        "type": "test_bundle",
+        "description": "Global-Local Processing Task - Navon hierarchical letter task testing attention and processing",
+        "output_dir": "bin/test-bundles",
+        "includes": [
+          {
+            "path": "upload-battery/globallocal",
+            "mount": "/usr/local/share/pebl2/battery/globallocal",
+            "description": "Global-Local task files including multiple stimuli sets and translations"
+          }
+        ],
+        "excludes": [
+          "*/data/*",
+          "*~",
+          "*.pbl.png"
+        ],
+        "options": {
+          "use_preload_cache": true,
+          "separate_metadata": true,
+          "lz4": false
+        },
+        "size_mb": 0.2,
+        "catalog_entry": {
+          "base_url": "/runtime/test-bundles",
+          "tests": [
+            "globallocal"
+          ]
+        }
+      },
+      {
+        "name": "ptrails",
+        "type": "test_bundle",
+        "description": "PEBL Trails Test - Trail-making task with multiple display types and path optimization",
+        "output_dir": "bin/test-bundles",
+        "includes": [
+          {
+            "path": "upload-battery/ptrails",
+            "mount": "/usr/local/share/pebl2/battery/ptrails",
+            "description": "PEBL Trails test files with example data and HTML reports"
+          }
+        ],
+        "excludes": [
+          "*~",
+          "*.pbl.png"
+        ],
+        "options": {
+          "use_preload_cache": true,
+          "separate_metadata": true,
+          "lz4": false
+        },
+        "size_mb": 0.1,
+        "catalog_entry": {
+          "base_url": "/runtime/test-bundles",
+          "tests": [
+            "ptrails"
+          ]
+        }
+      },
+      {
+        "name": "spanvariants",
+        "type": "test_bundle",
+        "description": "Span Variants Test - 9 working memory span tasks (forward/backward digit/letter/mixed spans plus ordering tasks)",
+        "output_dir": "bin/test-bundles",
+        "includes": [
+          {
+            "path": "upload-battery/spanvariants",
+            "mount": "/usr/local/share/pebl2/battery/spanvariants",
+            "description": "Span Variants test files with 20 language translations and audio support"
+          }
+        ],
+        "excludes": [
+          "*/data/*",
+          "*~",
+          "*.pbl.png"
+        ],
+        "options": {
+          "use_preload_cache": true,
+          "separate_metadata": true,
+          "lz4": false
+        },
+        "size_mb": 0.2,
+        "catalog_entry": {
+          "base_url": "/runtime/test-bundles",
+          "tests": [
+            "spanvariants"
+          ]
+        }
+      },
+      {
+        "name": "chimptest",
+        "type": "test_bundle",
+        "description": "Chimp Test - Number working memory task based on Ayumu chimp memory test (Inoue & Matsuzawa 2007)",
+        "output_dir": "bin/test-bundles",
+        "includes": [
+          {
+            "path": "upload-battery/chimptest",
+            "mount": "/usr/local/share/pebl2/battery/chimptest",
+            "description": "Chimp Test files with masking and limited-hold variants"
+          }
+        ],
+        "excludes": [
+          "*/data/*",
+          "*~",
+          "*.pbl.png"
+        ],
+        "options": {
+          "use_preload_cache": true,
+          "separate_metadata": true,
+          "lz4": false
+        },
+        "size_mb": 0.1,
+        "catalog_entry": {
+          "base_url": "/runtime/test-bundles",
+          "tests": [
+            "chimptest"
+          ]
+        }
+      },
+      {
+        "name": "digitsymbol",
+        "type": "test_bundle",
+        "description": "Digit-Symbol Substitution Test - Processing speed and associative learning test with 4 task modes (Wechsler, 1981)",
+        "output_dir": "bin/test-bundles",
+        "includes": [
+          {
+            "path": "upload-battery/digitsymbol",
+            "mount": "/usr/local/share/pebl2/battery/digitsymbol",
+            "description": "Digit-Symbol test with 7 translations, 4 modes (symbol→digit, digit→symbol, letter→digit, digit→letter)"
+          }
+        ],
+        "excludes": [
+          "*/data/*",
+          "*~",
+          "*.pbl.png"
+        ],
+        "options": {
+          "use_preload_cache": true,
+          "separate_metadata": true,
+          "lz4": false
+        },
+        "size_mb": 0.1,
+        "catalog_entry": {
+          "base_url": "/runtime/test-bundles",
+          "tests": [
+            "digitsymbol"
+          ]
+        }
+      },
+      {
+        "name": "dccs",
+        "type": "test_bundle",
+        "description": "Dimensional Change Card Sort Test - Executive function and cognitive flexibility assessment with audio narration",
+        "output_dir": "bin/test-bundles",
+        "includes": [
+          {
+            "path": "upload-battery/dccs",
+            "mount": "/usr/local/share/pebl2/battery/dccs",
+            "description": "DCCS test files including card images and audio narration"
+          }
+        ],
+        "excludes": [
+          "*/data/*",
+          "*~",
+          "*.pbl.png",
+          "*.pdf"
+        ],
+        "options": {
+          "use_preload_cache": true,
+          "separate_metadata": true,
+          "lz4": false
+        },
+        "size_mb": 1.5,
+        "catalog_entry": {
+          "base_url": "/runtime/test-bundles",
+          "tests": [
+            "dccs"
+          ]
+        }
+      },
+      {
+        "name": "linejudgment",
+        "type": "test_bundle",
+        "description": "Line Judgment Task - Speed-accuracy tradeoff task comparing line lengths (Henmon, 1910)",
+        "output_dir": "bin/test-bundles",
+        "includes": [
+          {
+            "path": "upload-battery/linejudgment",
+            "mount": "/usr/local/share/pebl2/battery/linejudgment",
+            "description": "Line judgment test files with 7 translations and 8 response modes"
+          }
+        ],
+        "excludes": [
+          "*/data/*",
+          "*~",
+          "*.pbl.png"
+        ],
+        "options": {
+          "use_preload_cache": true,
+          "separate_metadata": true,
+          "lz4": false
+        },
+        "size_mb": 0.1,
+        "catalog_entry": {
+          "base_url": "/runtime/test-bundles",
+          "tests": [
+            "linejudgment"
+          ]
+        }
+      },
+      {
+        "name": "timetap",
+        "type": "test_bundle",
+        "description": "Time-Tapping Task - Motor timing task measuring self-paced tapping consistency (UTC-PAB test 19)",
+        "output_dir": "bin/test-bundles",
+        "includes": [
+          {
+            "path": "upload-battery/timetap",
+            "mount": "/usr/local/share/pebl2/battery/timetap",
+            "description": "Time-tapping test files with 7 translations and visual timer feedback"
+          }
+        ],
+        "excludes": [
+          "*/data/*",
+          "*~",
+          "*.pbl.png"
+        ],
+        "options": {
+          "use_preload_cache": true,
+          "separate_metadata": true,
+          "lz4": false
+        },
+        "size_mb": 0.1,
+        "catalog_entry": {
+          "base_url": "/runtime/test-bundles",
+          "tests": [
+            "timetap"
+          ]
+        }
+      },
+      {
+        "name": "vsearch",
+        "type": "test_bundle",
+        "description": "Visual Search Task - Two-phase visual search paradigm with color and character targets",
+        "output_dir": "bin/test-bundles",
+        "includes": [
+          {
+            "path": "upload-battery/vsearch",
+            "mount": "/usr/local/share/pebl2/battery/vsearch",
+            "description": "Visual search test files with 8 translations and layout integration"
+          }
+        ],
+        "excludes": [
+          "*/data/*",
+          "*~",
+          "*.pbl.png"
+        ],
+        "options": {
+          "use_preload_cache": true,
+          "separate_metadata": true,
+          "lz4": false
+        },
+        "size_mb": 0.1,
+        "catalog_entry": {
+          "base_url": "/runtime/test-bundles",
+          "tests": [
+            "vsearch"
+          ]
+        }
+      },
+      {
+        "name": "nback",
+        "type": "test_bundle",
+        "description": "Dual N-Back Task - Working memory test with auditory/visual letters/numbers and spatial positions",
+        "output_dir": "bin/test-bundles",
+        "includes": [
+          {
+            "path": "upload-battery/nback",
+            "mount": "/usr/local/share/pebl2/battery/nback",
+            "description": "Dual N-back test files with audio sounds and 4 translations"
+          }
+        ],
+        "excludes": [
+          "*/data/*",
+          "*~",
+          "*.pbl.png"
+        ],
+        "options": {
+          "use_preload_cache": true,
+          "separate_metadata": true,
+          "lz4": false
+        },
+        "size_mb": 0.15,
+        "catalog_entry": {
+          "base_url": "/runtime/test-bundles",
+          "tests": [
+            "nback"
+          ]
+        }
+      },
+      {
+        "name": "dualtask",
+        "type": "test_bundle",
+        "description": "Dual-Task Interference Test - Multi-task performance test measuring dual-task interference effects",
+        "output_dir": "bin/test-bundles",
+        "includes": [
+          {
+            "path": "upload-battery/dualtask",
+            "mount": "/usr/local/share/pebl2/battery/dualtask",
+            "description": "Dual-task test files with translations and layout integration"
+          }
+        ],
+        "excludes": [
+          "*/data/*",
+          "*~",
+          "*.pbl.png"
+        ],
+        "options": {
+          "use_preload_cache": true,
+          "separate_metadata": true,
+          "lz4": false
+        },
+        "size_mb": 0.1,
+        "catalog_entry": {
+          "base_url": "/runtime/test-bundles",
+          "tests": [
+            "dualtask"
+          ]
+        }
+      },
+      {
+        "name": "hicks",
+        "type": "test_bundle",
+        "description": "Hick's Law Task - Choice reaction time task demonstrating logarithmic RT increase with response alternatives",
+        "output_dir": "bin/test-bundles",
+        "includes": [
+          {
+            "path": "upload-battery/hicks",
+            "mount": "/usr/local/share/pebl2/battery/hicks",
+            "description": "Hick's Law task with layout integration and LSL support"
+          }
+        ],
+        "excludes": [
+          "*/data/*",
+          "*~",
+          "*.pbl.png"
+        ],
+        "options": {
+          "use_preload_cache": true,
+          "separate_metadata": true,
+          "lz4": false
+        },
+        "size_mb": 0.1,
+        "catalog_entry": {
+          "base_url": "/runtime/test-bundles",
+          "tests": [
+            "hicks"
+          ]
+        }
+      },
+      {
+        "name": "twocoladd",
+        "type": "test_bundle",
+        "description": "Two-Column Addition Test - Mental arithmetic task requiring addition of three two-digit numbers (UTC-PAB Test 4)",
+        "output_dir": "bin/test-bundles",
+        "includes": [
+          {
+            "path": "upload-battery/twocoladd",
+            "mount": "/usr/local/share/pebl2/battery/twocoladd",
+            "description": "Two-column addition test with HTML-lite formatted instructions"
+          }
+        ],
+        "excludes": [
+          "*/data/*",
+          "*~",
+          "*.pbl.png"
+        ],
+        "options": {
+          "use_preload_cache": true,
+          "separate_metadata": true,
+          "lz4": false
+        },
+        "size_mb": 0.1,
+        "catalog_entry": {
+          "base_url": "/runtime/test-bundles",
+          "tests": [
+            "twocoladd"
+          ]
+        }
+      },
+      {
+        "name": "tracking",
+        "type": "test_bundle",
+        "description": "Tracking Task - Continuous mouse tracking with optional x/y axis reversal for sensorimotor adaptation testing",
+        "output_dir": "bin/test-bundles",
+        "includes": [
+          {
+            "path": "upload-battery/tracking",
+            "mount": "/usr/local/share/pebl2/battery/tracking",
+            "description": "Tracking task with LSL integration and layout support"
+          }
+        ],
+        "excludes": [
+          "*/data/*",
+          "*~",
+          "*.pbl.png"
+        ],
+        "options": {
+          "use_preload_cache": true,
+          "separate_metadata": true,
+          "lz4": false
+        },
+        "size_mb": 0.1,
+        "catalog_entry": {
+          "base_url": "/runtime/test-bundles",
+          "tests": [
+            "tracking"
+          ]
+        }
+      },
+      {
+        "name": "movetotarget",
+        "type": "test_bundle",
+        "description": "Move-to-Target Task - Rapid pointing task with optional x/y axis reversal for sensorimotor adaptation testing",
+        "output_dir": "bin/test-bundles",
+        "includes": [
+          {
+            "path": "upload-battery/movetotarget",
+            "mount": "/usr/local/share/pebl2/battery/movetotarget",
+            "description": "Move-to-target task with LSL integration and layout support"
+          }
+        ],
+        "excludes": [
+          "**/data/**",
+          "**/.Rhistory",
+          "*~",
+          "*.pbl.png",
+          "**/analysis.*"
+        ],
+        "options": {
+          "use_preload_cache": true,
+          "separate_metadata": true,
+          "lz4": false
+        },
+        "size_mb": 0.1,
+        "catalog_entry": {
+          "base_url": "/runtime/test-bundles",
+          "tests": [
+            "movetotarget"
+          ]
+        }
+      },
+      {
+        "name": "tsp",
+        "type": "test_bundle",
+        "description": "Traveling Salesman Problem Task - Path optimization task testing visual-spatial planning and route finding",
+        "output_dir": "bin/test-bundles",
+        "includes": [
+          {
+            "path": "upload-battery/tsp",
+            "mount": "/usr/local/share/pebl2/battery/tsp",
+            "description": "TSP test files including tour problems and 10 translations"
+          }
+        ],
+        "excludes": [
+          "*/data/*",
+          "*~",
+          "*.pbl.png"
+        ],
+        "options": {
+          "use_preload_cache": true,
+          "separate_metadata": true,
+          "lz4": false
+        },
+        "size_mb": 0.1,
+        "catalog_entry": {
+          "base_url": "/runtime/test-bundles",
+          "tests": [
+            "tsp"
+          ]
+        }
+      },
+      {
+        "name": "ospan",
+        "type": "test_bundle",
+        "description": "Operation Span Task - Complex working memory span task combining math processing with letter recall (Unsworth et al., 2005)",
+        "output_dir": "bin/test-bundles",
+        "includes": [
+          {
+            "path": "upload-battery/ospan",
+            "mount": "/usr/local/share/pebl2/battery/ospan",
+            "description": "OSPAN test files with distraction tasks and translations"
+          }
+        ],
+        "excludes": [
+          "*/data/*",
+          "*~",
+          "*.pbl.png",
+          "*.pbl~",
+          "*.json~"
+        ],
+        "options": {
+          "use_preload_cache": true,
+          "separate_metadata": true,
+          "lz4": false
+        },
+        "size_mb": 0.1,
+        "catalog_entry": {
+          "base_url": "/runtime/test-bundles",
+          "tests": [
+            "ospan"
+          ]
+        }
+      },
+      {
+        "name": "symmetryspan",
+        "type": "test_bundle",
+        "description": "Symmetry Span Task - Visuospatial working memory span task combining symmetry judgments with spatial location recall (Kane et al., 2004)",
+        "output_dir": "bin/test-bundles",
+        "includes": [
+          {
+            "path": "upload-battery/symmetryspan",
+            "mount": "/usr/local/share/pebl2/battery/symmetryspan",
+            "description": "Symmetry Span test files with symmetry images and 7 translations"
+          }
+        ],
+        "excludes": [
+          "*/data/*",
+          "*~",
+          "*.pbl.png",
+          "*.pbl~",
+          "*.json~"
+        ],
+        "options": {
+          "use_preload_cache": true,
+          "separate_metadata": true,
+          "lz4": false
+        },
+        "size_mb": 0.3,
+        "catalog_entry": {
+          "base_url": "/runtime/test-bundles",
+          "tests": [
+            "symmetryspan"
+          ]
+        }
+      },
+      {
+        "name": "readingspan",
+        "type": "test_bundle",
+        "description": "Reading Span Task - Complex working memory span task combining sentence processing with letter recall (Daneman & Carpenter, 1980; Unsworth et al., 2009)",
+        "output_dir": "bin/test-bundles",
+        "includes": [
+          {
+            "path": "upload-battery/readingspan",
+            "mount": "/usr/local/share/pebl2/battery/readingspan",
+            "description": "Reading Span test files with sentence distraction tasks and 7 translations"
+          }
+        ],
+        "excludes": [
+          "*/data/*",
+          "*~",
+          "*.pbl.png",
+          "*.pbl~",
+          "*.json~"
+        ],
+        "options": {
+          "use_preload_cache": true,
+          "separate_metadata": true,
+          "lz4": false
+        },
+        "size_mb": 0.1,
+        "catalog_entry": {
+          "base_url": "/runtime/test-bundles",
+          "tests": [
+            "readingspan"
+          ]
+        }
+      },
+      {
+        "name": "private_uploads",
+        "type": "test_bundle",
+        "description": "Private tests requiring individual access grants (MRT, spatialgrid)",
+        "output_dir": "bin",
+        "includes": [
+          {
+            "path": "private_tasks/MRT",
+            "mount": "/usr/local/share/pebl2/private_battery/MRT",
+            "description": "Mental Rotation Test"
+          },
+          {
+            "path": "private_tasks/spatialgrid",
+            "mount": "/usr/local/share/pebl2/private_battery/spatialgrid",
+            "description": "Spatial Grid Memory Test"
+          }
+        ],
+        "excludes": [
+          "*/data/*",
+          "*~",
+          "*.pbl.png",
+          "*.csv"
+        ],
+        "options": {
+          "use_preload_cache": true,
+          "separate_metadata": true,
+          "lz4": false
+        },
+        "size_mb": 3.6,
+        "catalog_entry": {
+          "base_url": "/runtime",
+          "tests": [
+            "MRT",
+            "spatialgrid"
+          ]
+        }
+      },
+      {
+        "name": "evenodd",
+        "type": "test_bundle",
+        "description": "Even/Odd Classification Task",
+        "output_dir": "bin/test-bundles",
+        "includes": [
+          {
+            "path": "upload-battery/evenodd",
+            "mount": "/usr/local/share/pebl2/battery/evenodd",
+            "description": "Even/Odd task with translations"
+          }
+        ],
+        "excludes": [
+          "*/data/*",
+          "*~",
+          "*.pbl.png"
+        ],
+        "options": {
+          "use_preload_cache": true,
+          "separate_metadata": true,
+          "lz4": false
+        },
+        "size_mb": 0.1
+      },
+      {
+        "name": "dotjudgment",
+        "type": "test_bundle",
+        "description": "Dot Numerosity Judgment Task",
+        "output_dir": "bin/test-bundles",
+        "includes": [
+          {
+            "path": "upload-battery/dotjudgment",
+            "mount": "/usr/local/share/pebl2/battery/dotjudgment",
+            "description": "Dot Judgment task with translations"
+          }
+        ],
+        "excludes": [
+          "*/data/*",
+          "*~",
+          "*.pbl.png"
+        ],
+        "options": {
+          "use_preload_cache": true,
+          "separate_metadata": true,
+          "lz4": false
+        },
+        "size_mb": 0.1
+      },
+      {
+        "name": "sternberg",
+        "type": "test_bundle",
+        "description": "Sternberg Memory Scanning Task",
+        "output_dir": "bin/test-bundles",
+        "includes": [
+          {
+            "path": "upload-battery/sternberg",
+            "mount": "/usr/local/share/pebl2/battery/sternberg",
+            "description": "Sternberg task with 7 translations"
+          }
+        ],
+        "excludes": [
+          "*/data/*",
+          "*~",
+          "*.pbl.png"
+        ],
+        "options": {
+          "use_preload_cache": true,
+          "separate_metadata": true,
+          "lz4": false
+        },
+        "size_mb": 0.1
+      },
+      {
+        "name": "mathproc",
+        "type": "test_bundle",
+        "description": "Math Processing Task",
+        "output_dir": "bin/test-bundles",
+        "includes": [
+          {
+            "path": "upload-battery/mathproc",
+            "mount": "/usr/local/share/pebl2/battery/mathproc",
+            "description": "Math Processing task with 7 translations"
+          }
+        ],
+        "excludes": [
+          "*/data/*",
+          "*~",
+          "*.pbl.png"
+        ],
+        "options": {
+          "use_preload_cache": true,
+          "separate_metadata": true,
+          "lz4": false
+        },
+        "size_mb": 0.1
+      },
+      {
+        "name": "spatialcueing",
+        "type": "test_bundle",
+        "description": "Spatial Cueing (Posner) Task",
+        "output_dir": "bin/test-bundles",
+        "includes": [
+          {
+            "path": "upload-battery/spatialcueing",
+            "mount": "/usr/local/share/pebl2/battery/spatialcueing",
+            "description": "Posner cueing task with 7 translations"
+          }
+        ],
+        "excludes": [
+          "*/data/*",
+          "*~",
+          "*.pbl.png"
+        ],
+        "options": {
+          "use_preload_cache": true,
+          "separate_metadata": true,
+          "lz4": false
+        },
+        "size_mb": 0.1
+      },
+      {
+        "name": "mullerlyer",
+        "type": "test_bundle",
+        "description": "Muller-Lyer Illusion Task",
+        "output_dir": "bin/test-bundles",
+        "includes": [
+          {
+            "path": "upload-battery/mullerlyer",
+            "mount": "/usr/local/share/pebl2/battery/mullerlyer"
+          }
+        ],
+        "excludes": [
+          "*/data/*",
+          "*~",
+          "*.pbl.png"
+        ],
+        "options": {
+          "use_preload_cache": true,
+          "separate_metadata": true,
+          "lz4": false
+        },
+        "size_mb": 0.1
+      },
+      {
+        "name": "pattcomp-samediff",
+        "type": "test_bundle",
+        "description": "Pattern Comparison (Same/Different)",
+        "output_dir": "bin/test-bundles",
+        "includes": [
+          {
+            "path": "upload-battery/pattcomp-samediff",
+            "mount": "/usr/local/share/pebl2/battery/pattcomp-samediff"
+          }
+        ],
+        "excludes": [
+          "*/data/*",
+          "*~",
+          "*.pbl.png"
+        ],
+        "options": {
+          "use_preload_cache": true,
+          "separate_metadata": true,
+          "lz4": false
+        },
+        "size_mb": 0.1
+      },
+      {
+        "name": "pattcomp-seq",
+        "type": "test_bundle",
+        "description": "Pattern Comparison (Sequential)",
+        "output_dir": "bin/test-bundles",
+        "includes": [
+          {
+            "path": "upload-battery/pattcomp-seq",
+            "mount": "/usr/local/share/pebl2/battery/pattcomp-seq"
+          }
+        ],
+        "excludes": [
+          "*/data/*",
+          "*~",
+          "*.pbl.png"
+        ],
+        "options": {
+          "use_preload_cache": true,
+          "separate_metadata": true,
+          "lz4": false
+        },
+        "size_mb": 0.1
+      },
+      {
+        "name": "plusminus",
+        "type": "test_bundle",
+        "description": "Plus-Minus Task",
+        "output_dir": "bin/test-bundles",
+        "includes": [
+          {
+            "path": "upload-battery/plusminus",
+            "mount": "/usr/local/share/pebl2/battery/plusminus"
+          }
+        ],
+        "excludes": [
+          "*/data/*",
+          "*~",
+          "*.pbl.png"
+        ],
+        "options": {
+          "use_preload_cache": true,
+          "separate_metadata": true,
+          "lz4": false
+        },
+        "size_mb": 0.1
+      },
+      {
+        "name": "probrev",
+        "type": "test_bundle",
+        "description": "Probabilistic Reversal Learning",
+        "output_dir": "bin/test-bundles",
+        "includes": [
+          {
+            "path": "upload-battery/probrev",
+            "mount": "/usr/local/share/pebl2/battery/probrev"
+          }
+        ],
+        "excludes": [
+          "*/data/*",
+          "*~",
+          "*.pbl.png"
+        ],
+        "options": {
+          "use_preload_cache": true,
+          "separate_metadata": true,
+          "lz4": false
+        },
+        "size_mb": 0.2
+      },
+      {
+        "name": "brownpeterson",
+        "type": "test_bundle",
+        "description": "Brown-Peterson Task",
+        "output_dir": "bin/test-bundles",
+        "includes": [
+          {
+            "path": "upload-battery/brownpeterson",
+            "mount": "/usr/local/share/pebl2/battery/brownpeterson"
+          }
+        ],
+        "excludes": [
+          "*/data/*",
+          "*~",
+          "*.pbl.png"
+        ],
+        "options": {
+          "use_preload_cache": true,
+          "separate_metadata": true,
+          "lz4": false
+        },
+        "size_mb": 0.1
+      },
+      {
+        "name": "itemorder",
+        "type": "test_bundle",
+        "description": "Item Order Task",
+        "output_dir": "bin/test-bundles",
+        "includes": [
+          {
+            "path": "upload-battery/itemorder",
+            "mount": "/usr/local/share/pebl2/battery/itemorder"
+          }
+        ],
+        "excludes": [
+          "*/data/*",
+          "*~",
+          "*.pbl.png"
+        ],
+        "options": {
+          "use_preload_cache": true,
+          "separate_metadata": true,
+          "lz4": false
+        },
+        "size_mb": 0.1
+      },
+      {
+        "name": "matchtosample",
+        "type": "test_bundle",
+        "description": "Match To Sample",
+        "output_dir": "bin/test-bundles",
+        "includes": [
+          {
+            "path": "upload-battery/matchtosample",
+            "mount": "/usr/local/share/pebl2/battery/matchtosample"
+          }
+        ],
+        "excludes": [
+          "*/data/*",
+          "*~",
+          "*.pbl.png"
+        ],
+        "options": {
+          "use_preload_cache": true,
+          "separate_metadata": true,
+          "lz4": false
+        },
+        "size_mb": 0.1
+      },
+      {
+        "name": "randomgeneration",
+        "type": "test_bundle",
+        "description": "Random Generation Task",
+        "output_dir": "bin/test-bundles",
+        "includes": [
+          {
+            "path": "upload-battery/randomgeneration",
+            "mount": "/usr/local/share/pebl2/battery/randomgeneration"
+          }
+        ],
+        "excludes": [
+          "*/data/*",
+          "*~",
+          "*.pbl.png"
+        ],
+        "options": {
+          "use_preload_cache": true,
+          "separate_metadata": true,
+          "lz4": false
+        },
+        "size_mb": 0.1
+      }
+    ]
+  }
+}

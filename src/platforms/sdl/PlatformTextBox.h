@@ -1,0 +1,131 @@
+//* -*- mode:C++; tab-width:4; c-basic-offset:4; indent-tabs-mode:nil -*- */
+/////////////////////////////////////////////////////////////////////////////////
+//    Name:       src/platforms/sdl/PlatformTextBox.h
+//    Purpose:    Contains platform-specific interface for text boxes
+//    Author:     Shane T. Mueller, Ph.D.
+//    Copyright:  (c) 2003-2026 Shane T. Mueller <smueller@obereed.net>
+//    License:    GPL 2
+//
+//
+//
+//     This file is part of the PEBL project.
+//
+//    PEBL is free software; you can redistribute it and/or modify
+//    it under the terms of the GNU General Public License as published by
+//    the Free Software Foundation; either version 2 of the License, or
+//    (at your option) any later version.
+//
+//    PEBL is distributed in the hope that it will be useful,
+//    but WITHOUT ANY WARRANTY; without even the implied warranty of
+//    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+//    GNU General Public License for more details.
+//
+//    You should have received a copy of the GNU General Public License
+//    along with PEBL; if not, write to the Free Software
+//    Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+////////////////////////////////////////////////////////////////////////////////
+#ifndef __PLATFORMTEXTBOX_H__
+#define __PLATFORMTEXTBOX_H__
+
+#include "PlatformWidget.h"
+#include "PlatformFont.h"
+#include "../../objects/PTextBox.h"
+
+#ifdef PEBL_OSX
+#include "SDL.h"
+#include "SDL_ttf.h"
+#else
+#include "SDL.h"
+#include "SDL_ttf.h"
+#endif
+
+#include "../../utility/rc_ptrs.h"
+#include "../../base/PEBLObject.h"
+#include "../../utility/FormatParser.h"
+
+#include <vector>
+#include <map>
+#include <tuple>
+
+///
+/// This class defines an SDL-specific text box.
+///
+
+
+class PlatformTextBox: virtual  public PlatformWidget, virtual public PTextBox
+{
+public:
+    PlatformTextBox(std::string text, counted_ptr<PEBLObjectBase> font, int width, int height);
+
+    ///This copy constructor isn't const because the font is shared.
+    PlatformTextBox(const PlatformTextBox & textbox);
+
+    virtual ~PlatformTextBox();
+
+
+    virtual bool RenderText();
+
+    virtual bool SetProperty(std::string, Variant v);
+    virtual Variant GetProperty(std::string name)const;
+    //These need to be overridden because the text needs to be re-rendered when they are called.
+    virtual void SetFont(counted_ptr<PEBLObjectBase> font);
+    virtual void SetText(std::string  text);
+    virtual void SetHeight(int h);
+    virtual void SetWidth(int w);
+
+    //This needs to be overridden so that it returns a PlatformFont.
+    // Return adaptive font if it exists, otherwise return original
+    virtual counted_ptr<PEBLObjectBase> GetFont()const{
+        return mAdaptiveFontObject.get() ? mAdaptiveFontObject : mFontObject;
+    }
+
+
+    virtual bool Draw();
+    virtual void HandleKeyPress(int keycode, int modkeys, Uint16 unicode);
+    virtual void HandleTextInput(std::string input);
+    virtual std::string ObjectName()const{return "PlatformTextBox";} ;
+    virtual int FindCursorPosition(long int x, long int y);
+    virtual void SetEditable(bool val);
+    Variant GetLineBreaks();
+protected:
+
+    virtual std::ostream & SendToStream(std::ostream& out) const;
+
+    std::vector<int> mBreaks;  ///This stores linebreaks
+
+private:
+    // Helper to get PlatformFont pointer from counted_ptr when needed
+    // Returns adaptive font if it exists, otherwise returns original font
+    PlatformFont* GetPlatformFont() const {
+        if (mAdaptiveFontObject.get()) {
+            return dynamic_cast<PlatformFont*>(mAdaptiveFontObject.get());
+        }
+        return dynamic_cast<PlatformFont*>(mFontObject.get());
+    }
+
+    void FindBreaks();
+    int FindNextLineBreak(unsigned int curposition);
+
+    // Size-aware line breaking for formatted text
+    void FindBreaksFormatted(const std::vector<FormatParser::FormatSegment>& segments);
+    void FindBreaksInSegment(const FormatParser::FormatSegment& seg,
+                            PlatformFont* segFont,
+                            int& currentLineWidth,
+                            int& currentLineMaxHeight,
+                            std::string& currentLineText,
+                            int& strippedTextPos,
+                            int& totalHeight);
+
+    void DrawCursor();
+
+    counted_ptr<PEBLObjectBase> mFontObject;
+    counted_ptr<PEBLObjectBase> mAdaptiveFontObject;  // Holds adapted font separately to avoid destructor cascade
+    std::vector<counted_ptr<PEBLObjectBase>> mIntermediateFonts;  // Keeps intermediate adaptive fonts alive
+    bool mIsUTF8;
+    std::string mStrippedText;  // For formatted mode: stores text with tags stripped (used for line breaking)
+
+};
+
+
+
+#endif

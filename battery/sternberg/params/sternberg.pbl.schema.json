@@ -1,0 +1,70 @@
+{
+  "test": "sternberg",
+  "version": "1.0",
+  "description": "Sternberg Memory Scanning Task",
+  "parameters": [
+    {
+      "name": "length1",
+      "type": "integer",
+      "default": 2,
+      "description": "Set size 1"
+    },
+    {
+      "name": "length2",
+      "type": "integer",
+      "default": 4,
+      "description": "Set size 2"
+    },
+    {
+      "name": "length3",
+      "type": "integer",
+      "default": 6,
+      "description": "Set size 3"
+    },
+    {
+      "name": "rounds",
+      "type": "integer",
+      "default": 2,
+      "description": "Number of rounds. Rounds repeat all set sizes in order."
+    },
+    {
+      "name": "samestim",
+      "type": "boolean",
+      "default": 1,
+      "description": "Whether the same stimuli should be used in each round."
+    },
+    {
+      "name": "trialsperblock",
+      "type": "integer",
+      "default": 25,
+      "description": "Number of target and foil trials per block (total trials = 2x this)."
+    },
+
+    {
+      "name": "isi",
+      "type": "integer",
+      "default": 50,
+      "description": "Inter-stimulus interval. Time in ms of blank screen after response and before next stimulus."
+    },
+    {
+      "name": "stimset",
+      "type": "string",
+      "default": "BCDFGHJKLMNPQRSTVWZ",
+      "description": "Characters to sample the stimulus set from. Must contain at least as many as largest set size."
+    },
+    {
+      "name": "responsemode",
+      "type": "string",
+      "default": "auto",
+      "options": ["auto", "keyboardShift", "keyboardSafe", "arrowLR", "mousetarget", "mousebutton", "userselect", "touchtarget"],
+      "label": "Response Mode",
+      "description": "Response method: auto (platform-aware), keyboardShift (L/R shift), keyboardSafe (Z/slash for web), arrowLR (left/right arrows), mousetarget (click targets), mousebutton (L/R mouse buttons), userselect (custom keys), touchtarget (large touch targets)"
+    },
+    {
+      "name": "responselabels",
+      "type": "list",
+      "default": ["PRESENT", "ABSENT"],
+      "description": "Semantic labels for left and right responses"
+    }
+  ]
+}

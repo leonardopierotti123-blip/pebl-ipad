@@ -1,0 +1,10 @@
+{
+    "INSTRUC": "This test examines your ability to mentally rotate one figure to compare it with another. You will see a 5 by 5 grid, with five of its cells lighted. You should learn the pattern as quickly and as accurately as possible, and then make a response shown below when you are sure you know the pattern. When you respond, a new pattern will be presented.   If the new pattern is the same as the old pattern, but turned 90 degrees to the left or right, respond 'same' as shown below.  If the pattern is not a 90 degree left or right rotation of the old pattern, respond 'different'. You will start with some practice trials. Make a response to begin",
+    "INST1": "Make a response to view test matrix",
+    "SAME": "SAME",
+    "DIFFERENT": "DIFFERENT",
+    "CORRECT": "Correct",
+    "INCORRECT": "Incorrect",
+    "PRACTICECOMPLETE": "Practice complete. Make a response to begin testing.",
+    "DEBRIEF": "This test is complete. Make a response to continue."
+}

@@ -1,0 +1,12 @@
+{
+"DEBRIEF": "Final. Bateria DPSM-HF ",
+"INST1": "Neste teste, irá ver uma série de '<TARG>' e '<FOIL>' aparecer numa grelha. Responda APENAS quando vir '<TARG>'. NÃO RESPONDA quando vir '<FOIL>'. A maioria das letras serão '<TARG>'. Abaixo, pode ver os estímulos <TARG> e <FOIL>, mas no teste real a letra pode estar debaixo de qualquer uma das quatro estrelas. Vai iniciar com alguns ensaios de prática onde receberá feedback sobre os erros. Quando estiver pronto, pressione a tecla ou botão de resposta mostrado abaixo para começar a prática.",
+"INST2": "Agora, fará a tarefa a sério. Já não será avisado quando cometer um erro. Pressione qualquer tecla para começar o próximo bloco.",
+"INST3": "Pode fazer um breve intervalo antes de continuar. Na segunda parte deste teste a regra vai mudar. Desta vez, responda APENAS para '<FOIL>', mas NÃO para '<TARG>'. Vai iniciar com ensaios de prática. Pressione qualquer tecla para começar a prática.",
+"LANGUAGE": "pt",
+"METHOD": "Responda (clique ou pressione uma tecla) para ",
+"HEADER_RESPOND_ONLY": "Responda APENAS para <TARG>",
+"CUE_RESPOND": "RESPONDER",
+"CUE_DONT_RESPOND": "NÃO RESPONDER",
+"TRIAL_COUNTER": "Ensaio <NUM> de <NUMTRIALS>"
+}

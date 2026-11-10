@@ -1,0 +1,79 @@
+{
+  "test": "ospan",
+  "version": "2.3",
+  "description": "Operation Span Task - measures working memory capacity by combining math problem solving with letter recall",
+  "parameters": [
+    {
+      "name": "feedbacktimeout",
+      "type": "integer",
+      "default": 1500,
+      "description": "Duration in milliseconds to display feedback after each trial"
+    },
+    {
+      "name": "distractfile",
+      "type": "string",
+      "default": "distraction.csv",
+      "description": "CSV file containing math problems (format: problem,answer,correctness)"
+    },
+    {
+      "name": "batterythreshold",
+      "type": "number",
+      "default": 0.85,
+      "description": "Minimum accuracy (0.0-1.0) required on math problems to proceed to main test. Typically 0.85 (85%)"
+    },
+    {
+      "name": "batteryFeedback",
+      "type": "integer",
+      "default": 1,
+      "description": "Whether to show feedback during test battery (1=yes, 0=no)"
+    },
+    {
+      "name": "distracttimeoutminimum",
+      "type": "integer",
+      "default": 1000,
+      "description": "Minimum timeout in milliseconds for math problems during test battery"
+    },
+    {
+      "name": "distracttimeoutmultiplier",
+      "type": "number",
+      "default": 2.5,
+      "description": "Multiplier for standard deviation when calculating math timeout: timeout = mean + (multiplier × SD). Unsworth et al. (2005) used mean + 2.5*SD based on extensive piloting"
+    },
+    {
+      "name": "requirethresholdprebattery",
+      "type": "integer",
+      "default": 1,
+      "description": "Require meeting accuracy threshold before starting test battery (1=yes, 0=no)"
+    },
+    {
+      "name": "allowsecondchance",
+      "type": "integer",
+      "default": 0,
+      "description": "Allow a second practice attempt if first practice fails to meet threshold (1=yes, 0=no)"
+    },
+    {
+      "name": "responsemode",
+      "type": "string",
+      "default": "none",
+      "description": "Response collection mode (currently only 'none' is supported, using custom mouse grid)"
+    },
+    {
+      "name": "testreps",
+      "type": "integer",
+      "default": 3,
+      "description": "Number of repetitions for each set size in the test battery (e.g., 3 means each set size appears 3 times)"
+    },
+    {
+      "name": "testminsize",
+      "type": "integer",
+      "default": 3,
+      "description": "Minimum set size (number of letters to recall) in the test battery. Must be at least 2"
+    },
+    {
+      "name": "testmaxsize",
+      "type": "integer",
+      "default": 7,
+      "description": "Maximum set size (number of letters to recall) in the test battery. Cannot exceed 12 (the memory grid size: 3 columns × 4 rows)"
+    }
+  ]
+}

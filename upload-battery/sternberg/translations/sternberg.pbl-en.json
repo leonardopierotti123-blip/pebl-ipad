@@ -1,0 +1,7 @@
+{
+  "HEADER": "Memory Scanning",
+  "INST1": "In this task, you will first see and memorize a short list of letters. For example BN. Once you have memorized the list, you will see a sequence of letters, and be asked to judge whether each one was or was not on the list. Press the PRESENT response key for letters on the list, and the ABSENT response key for letters not on the list. Press any key when you are ready to begin.",
+  "HEAD1": "Memorize this sequence. Press any key to begin test.",
+  "HEAD2": "PRESENT                             ABSENT",
+  "DEBRIEF": "Press any key to continue."
+}

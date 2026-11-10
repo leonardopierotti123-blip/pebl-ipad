@@ -1,0 +1,21 @@
+{
+    "INST":"In this test, you will have look at letters on the screen and determine if they are <STIM1> or <STIM2>.  But, like you see on the screen below, you might need to respond to small printed letters, or larger shapes of those letters.  Sometimes, the larger letter shapes will be made up of printed letters. As you see below, you can printed letters by themselves (center), and in different letter shapes (the sides).",
+    "INST1": "First, you will practice identifying individual letters, using the method shown below. You will either see a <STIM1> or a <STIM2>.  When you see a <STIM1>, respond LEFT.  When you see a <STIM2>, respond RIGHT. Respond as quickly and accurately as possible.",
+    "INST2": "Now, you will still need to decide between <STIM1> or a <STIM2>, but they will appear in large blocks on the screen, like you see below.",
+    "INST3": "Now, you will still need to decide between <STIM1> or a <STIM2>, but they will appear as large outlines of letters, created from small squares, like you see below.",
+    "INST4": "Now, you will still need to decide between <STIM1> or a <STIM2>, but they will appear as large squares or outlines of letters, created from individual letters, like you see below.  In this task, RESPOND TO THE SMALL LETTERS, and NOT THE LARGE OUTLINE.",
+    "INST5": "Now, you will still need to decide between <STIM1> or a <STIM2>, and they will appear as large outlines of letters, created from individual letters or boxes, like you see below.  In this task, RESPOND TO THE LARGE LETTER SHAPES, and NOT THE individual letters making up the shape.",
+    "INST6": "Now, you will still need to decide between <STIM1> or a <STIM2>, but they will appear as large squares or outlines of letters, created from individual letters, like you see below.   This round, each stimulus will be on a different area of the screen. RESPOND TO THE SMALL LETTERS, and NOT THE LARGE OUTLINE.",
+    "INST7": "Now, you will still need to decide between <STIM1> or a <STIM2>, and they will appear as large outlines of letters, created from individual letters or boxes, like you see below. This round, each stimulus will be on a different area of the screen.  RESPOND TO THE LARGE LETTER SHAPES, and NOT THE individual letters making up the shape.",
+    "CONTINUE":"Make a response to continue",
+    "DEBRIEF": "Thank you for participating in the study. Make a response to continue",
+    "FOOTER1": "Respond to letter",
+    "FOOTER2": "Respond to small letters",
+    "FOOTER3": "Respond to large letter",
+    "FOOTER4": "Respond to small letters",
+    "FOOTER5": "Respond to large letter",
+    "FOOTER6": "Respond to small letters",
+    "FOOTER7": "Respond to large letter",
+    "CORRECT": "CORRECT",
+    "INCORRECT": "INCORRECT"
+}

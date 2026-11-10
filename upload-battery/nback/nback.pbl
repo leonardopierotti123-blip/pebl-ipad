@@ -1,0 +1,779 @@
+## PEBL N-Back Test
+## Settings allow for either single or dual N-Back with
+## a variety of settings.
+
+define Start(p)
+{
+  ## Initialize upload system (works for both online and native)
+  InitializeUpload()
+
+  gScriptName <- "PEBL Dual N-back Task"
+  parpairs <- [["test1","consonants-av"],
+               ["test2","squares"],
+               ["nMin",1],
+	       ["nMax",3],
+	       ["isi",3000],
+	       ["dim1targs",4],
+	       ["dim2targs",4],
+	       ["bothtargs",2],
+	       ["trialsperblock",20],
+	       ["responsemode","auto"]
+	       ]
+
+    gParams <- CreateParameters(parpairs,gParamFile)
+
+    gConsonants <- ["C","H","K","N","R","W","X","Y"]
+    gNumbers    <- ["1","2","3","4","5","6","8","9"]
+
+  gConsonantSounds <- LoadSounds(gConsonants)
+  gNumberSounds <- LoadSounds(gNumbers)
+
+  gWin <- MakeWindow("black")
+  InitializeLSL(gWin)  ## Initialize LSL outlet if --lsl flag was used (shows prompt)
+
+  gSleepEasy <- 1
+  if(gSubNum+""=="0")
+   {
+     gSubNum <- GetSubNum(gWin)
+   }
+
+  ## Get translation strings first (needed for response labels)
+  GetStrings(gLanguage)
+
+  ## Set response semantics based on test type (before CreateLayout)
+  ## Determine if using letters or numbers from test1 parameter
+  leftSemantic <- gStrings.letter  ## default to letter
+  if(SubString(gParams.test1, 1, 7) == "numbers")
+  {
+    leftSemantic <- gStrings.number
+  }
+  gParams.responseSemantics <- [leftSemantic, gStrings.squares]
+
+  ## Store semantics globally for response checking
+  gLeftSemantic <- leftSemantic
+  gRightSemantic <- gStrings.squares
+
+  ## Create layout with response system (2AFC task)
+  gLayout <- CreateLayout("nback", gWin, gParams)
+
+  ## Store response labels for visual feedback (bolding on response)
+  if(Length(gLayout.responseLabels) >= 2)
+  {
+    gLeftLabel  <- First(gLayout.responseLabels)
+    gRightLabel <- Second(gLayout.responseLabels)
+    ## Store original font for unbolding
+    gOriginalFont <- gLeftLabel.font
+  }
+
+  ## Extract key names for instruction text substitution
+  ## Use FormatKeyName() from Layout.pbl to get properly formatted key names
+  if(gLayout.responseMode.type == "keyboard")
+  {
+    gLeftKeyName <- FormatKeyName(First(gLayout.responseMode.keys))
+    gRightKeyName <- FormatKeyName(Second(gLayout.responseMode.keys))
+  }
+  elseif(gLayout.responseMode.type == "mousebutton")
+  {
+    gLeftKeyName <- TranslateKeyName(GetButtonName(First(gLayout.responseMode.buttons)))
+    gRightKeyName <- TranslateKeyName(GetButtonName(Second(gLayout.responseMode.buttons)))
+  }
+  else
+  {
+    ## Fallback for other modes
+    gLeftKeyName <- "LEFT"
+    gRightKeyName <- "RIGHT"
+  }
+
+   gFileOut <- GetNewDataFile(gSubNum,gWin,"nback","csv",
+   "subnum,block,trial,dim1,dim2,nDim,n,isi,d1,d2,d3,d4,dotext,doaudio,dospatial,timestart,resp1,corr1,time2,rta,resp2,corr2,time3,rtb")
+
+  ##Do some basic  instructions. If you use this test, please edit the following, and provide your instructions back to the PEBL project.
+
+   MessageKeyBox(gStrings.inst1,gWin)
+
+  if(gParams.test1 != "none")
+   {
+   gBlock <- "p1"
+   LSLMarker("block_p1_start")
+   ShowCursor(0)
+   DoNBackSequence(gParams.test1,"none",1,gParams.isi,2,2,2,10)
+   LSLMarker("block_p1_end")
+
+  MessageKeyBox(gSTrings.inst2,gWin)
+
+   ShowCursor(0)
+   gBlock <- "p2"
+   LSLMarker("block_p2_start")
+   DoNBackSequence(gParams.test1,"none",2,gParams.isi,2,2,2,10)
+   LSLMarker("block_p2_end")
+
+  } else {
+   gBlock <- "p1"
+   LSLMarker("block_p1_start")
+   ShowCursor(0)
+   DoNBackSequence(gParams.test1,gParams.test2,1,gParams.isi,2,2,2,10)
+   LSLMarker("block_p1_end")
+
+  MessageKeyBox(gStrings.inst3,gWin)
+   ShowCursor(0)
+   gBlock <- "p2"
+   LSLMarker("block_p2_start")
+   DoNBackSequence(gParams.test1,gParams.test2,2,gParams.isi,2,2,2,10)
+   LSLMarker("block_p2_end")
+
+  }
+
+
+  if(gParams.test2 != "none")
+
+   {
+    MessageKeyBox(gStrings.inst4,gWin)
+     ShowCursor(0)
+     gBlock <- "p3"
+     LSLMarker("block_p3_start")
+     DoNBackSequence("none",gParams.test2,1,gParams.isi,2,2,2,10)
+     LSLMarker("block_p3_end")
+
+   MessageKeyBox(gStrings.inst5,gWin)
+
+     gBlock <- "p4"
+    ShowCursor(0)
+     LSLMarker("block_p4_start")
+     DoNBackSequence(gParams.test1,gParams.test2,1,gParams.isi,2,2,2,10)
+     LSLMarker("block_p4_end")
+   }
+
+   ShowCursor(0)
+   lengths <- Sequence(gParams.nMin,gParams.nMax,1)
+   loop(i,lengths)
+    {
+
+      msg <- ReplaceChar(gStrings.testblock,"<N>",i+"")
+      MessageKeyBox(msg,gWin)
+
+     gBlock <- "t"+i
+     LSLMarker("block_t" + i + "_start")
+     ShowCursor(0)
+     DoNBackSequence(gParams.test1,gParams.test2,i,gParams.isi,
+                     gParams.dim1targs,gParams.dim2targs,gParams.bothtargs,
+		     gParams.trialsperblock)
+     LSLMarker("block_t" + i + "_end")
+    }
+
+
+   ShowCursor(1)
+
+   ## Finalize LSL
+   FinalizeLSL()
+
+   ## Close and upload data file
+   FileClose(gFileOut)
+   UploadFile(gSubNum, gFileOut.filename)
+
+   MessageKeyBox(gStrings.debrief,gWin)
+}
+
+## This will perform an n-back sequence of trials stimuli.
+## This requires only 'yes' responses for either dimension.
+## It supports one or two dimensions simultaneously.
+## if you use only one type, dim2targs and bothtargse will be ignored.
+## the number of trials in the sequence needs to be at least n plus
+## the three targs values, and should be more.
+## Jaeggi et al would be  4,4,2,10+n
+
+define DoNBackSequence(dim1,dim2, n, isi,
+                       dim1targs, dim2targs, bothtargs,trials )
+{
+
+
+  ontime <- 500
+#  dim1 <- "consonants-a"
+#  dim2 <- "none"
+
+  ## currently, dim1 and dim2 need to be different,
+  ## and can be either:
+  ##  "squares"       (dim2 only)
+
+  ##dim1:
+  ##  "consonants-a"  (Auditory consonants)
+  ##  "consonants-v"  (Visual consonants)
+  ##  "consonants-av" (both audio and visual)
+
+  ##  "numbers-a"     (auditory numbers)
+  ##  "numbers-v"     (visual numbers)
+  ##  "numbers-av"     (visual numbers)
+
+  ##  "none"          (either dimension)
+
+
+  if(not IsMember(dim1,["consonants-a","consonants-v","consonants-av","numbers-a","numbers-v","numbers-av","none"]))
+  {
+     SignalFatalError("First dimension n-back must be audio or visual or none")
+  }
+
+  if(not IsMember(dim2,["squares","none"]))
+  {
+     SignalFatalError("Second dimension n-back must be squares or none")
+  }
+
+
+
+  ##First, let's do the design.  We'll start AFTER the
+  ##first N padding stimuli.
+
+  if(dim1=="none" and  dim2 == "none")
+   {
+      SignalFatalError("At least one dimension must a real dimension.")
+   }
+
+  if(dim2 == "none" or dim1 == "none")
+  {
+     ndim <- 1
+
+  }else{
+
+     ndim <- 2
+  }
+
+
+  ## do the design now.
+   design <-  Merge(Repeat([0,0],n),Shuffle(FlattenN([Repeat([1,0],dim1targs),
+                       Repeat([0,1],dim2targs),
+           	       Repeat([1,1],bothtargs),
+		       Repeat([0,0],Max([0,trials-dim1targs-dim2targs-bothtargs]))],1)))
+
+      ##Now, our design tells us whether there should be a  in
+      ##both dimensions 1 and dimensions 2, N-back
+      ##So, create the stimuli so this works.
+      ##each n-back task will have 8 possible stimuli.
+
+      sampset <- Sequence(1,8,1)
+      fullstim <- []
+
+      ##Create the stimulus sequence now:
+      dim1stim <- SampleN(sampset,n)
+      dim2stim <- SampleN(sampset,n)
+      typeLabel1 <- ""
+      typeLabel2 <- ""
+
+      loop(i,Sequence(n+1, n+trials,1))
+      {
+        des <- Nth(design,i)
+
+        if(First(des)==0)
+         {
+	    ##choose on that doesn't match
+            dim1val <- SampleExcept(sampset,Nth(dim1stim,i-n))
+	 }else{
+  	   ##choose one that does match
+	    dim1val <- Nth(dim1stim,i-n)
+         }
+	 PushOnEnd(dim1Stim,dim1val)
+
+        if(Second(des)==0)
+         {
+	    ##choose on that doesn't match
+            dim2val <- SampleExcept(sampset,Nth(dim2stim,i-n))
+	 }else{
+	    ##choose on that does
+            dim2val <- Nth(dim2stim,i-n)
+         }
+	 PushOnEnd(dim2stim,dim2val)
+      }
+
+     td <- Transpose(design)
+     stimseq <- Transpose([First(td),Second(td),dim1stim,dim2stim])
+
+
+     ##Now, the stimulus sequence has been created.  We should
+     ##worry about what the stimuli are now.
+
+     ##Start them out empty:
+     audioList <- Repeat(0,8)
+     textList <- Repeat(0,8)
+     shapeList <- Repeat(0,8)
+
+      ##Now, we have the stimuli, the sequences, and can actually do the test.
+
+      doAudio <- ((dim1 == "consonants-a") or
+                  (dim1 == "numbers-a") or
+		  (dim1 == "numbers-av") or
+		  (dim1 == "consonants-av"))
+
+      doText <-  ((dim1 == "consonants-v") or
+                  (dim1 == "numbers-v") or
+		  (dim1 == "numbers-av") or
+		  (dim1 == "consonants-av"))
+
+
+
+      doSpatial <-  (dim2 == "squares")
+
+
+
+
+    ##first, check for consonants, creating
+      if(dim1 == "consonants-v" or dim1 == "consonants-av" or dim1 == "consonants-a")
+      {
+	dim1stimlist <- gConsonants
+	typelabel1 <- gStrings.letter
+      }elseif(dim1 == "numbers-v" or dim1 == "numbers-av" or dim1 == "numbers-a")
+      {
+       dim1stimlist <- gNumbers
+       typeLabel1 <- gStrings.number
+      }
+
+
+      if(doText)
+      {
+       widgets <- []
+       loop(i, dim1stimlist)
+        {
+          tmp <- EasyLabel(i,gLayout.centerX,gLayout.centerY,gWin,80)
+	  widgets <- Append(widgets,tmp)
+	  Hide(tmp)
+        }
+
+       dim1widgets <- widgets
+      }else{
+       dim1widgets <- Repeat(0,8)
+      }
+
+
+     if(doSpatial)
+      {
+	 xc <- gLayout.centerX
+	 yc <- gLayout.centerY
+
+         cellsize <- 100
+         a <- cellsize  ##Adjustment
+         ##Add squares in their offset position.
+         posx <- [-a,0,a,-a,a,-a,0,a]
+	 posy <- [-a,-a,-a,0,0,a,a,a]
+	 widgets <- []
+	 loop(i,Transpose([posx,posy]))
+	 {
+	    tmp <- Square(First(i)+xc,
+                         Second(i)+yc,
+			 cellsize * .7,
+			 MakeColor("white"),1)
+            PushOnEnd(widgets,tmp)
+            AddObject(tmp,gWin)
+	    Hide(tmp)
+	 }
+
+	 dim2widgets <-  widgets
+
+	 ##Draw lines
+	 white <- MakeColor("white")
+         lines <- [Line(xc-cellsize*1.5, yc-cellsize*1.5,0,cellsize*3,white),
+	          Line(xc-cellsize*.5,   yc-cellsize*1.5,0,cellsize*3,white),
+	          Line(xc+cellsize*.5,   yc-cellsize*1.5,0,cellsize*3,white),
+		  Line(xc+cellsize*1.5,  yc-cellsize*1.5,0,cellsize*3,white),
+		  Line(xc-cellsize*1.5,  yc-cellsize*1.5,cellsize*3,0,white),
+	          Line(xc-cellsize*1.5,  yc-cellsize*.5,cellsize*3,0,white),
+	          Line(xc-cellsize*1.5,  yc+cellsize*.5,cellsize*3,0,white),
+		  Line(xc-cellsize*1.5,  yc+cellsize*1.5,cellsize*3,0,white)]
+	loop(line,lines)
+	{
+          AddObject(line,gWin)
+	}
+	typelabel2 <- gStrings.squares
+
+      }else{
+        dim2widgets <- Repeat(0,8)
+      }
+
+      if(doAudio)
+      {
+	if(typelabel1 == gStrings.letter)
+	{
+	  dim1audio <- gConsonantSounds
+        }else{
+ 	 dim1Audio <- gNumberSounds
+	}
+      } else {
+          dim1audio <- Repeat(0,8)
+      }
+
+     ##  Now, we have dim1widgets, dim1audio, and dim2widgets
+     ##  which we can just turn on and off. depending on
+     ## doAudio, doText, and doSpatial
+
+    topLabel <-  EasyLabel(ReplaceChar(gStrings.header,"<N>",n+""),
+                       gLayout.centerX,gLayout.header.y+40,gWin,60)
+
+    respfilter <- [doAudio or doText, doSpatial]
+
+    ## Response labels are now handled by Layout & Response System
+    ## Update layout footer text based on active dimensions
+    ## LEFT = dimension 1 (letters/numbers), RIGHT = dimension 2 (position/squares)
+    if(First(respfilter) and Second(respfilter))
+    {
+      ## Both dimensions active
+      gLayout.footer.text <- typelabel1 + " " + gStrings.left + " | " + gStrings.right + " " + typeLabel2
+    } elseif(First(respfilter))
+    {
+      ## Only dimension 1 active
+      gLayout.footer.text <- typelabel1 + " " + gStrings.left
+    } elseif(Second(respfilter))
+    {
+      ## Only dimension 2 active
+      gLayout.footer.text <- gStrings.right + " " + typeLabel2
+    }
+
+     center <- Easylabel(gStrings.begin,gLayout.centerX,gLayout.centerY-220,gWin,50)
+
+     Draw()
+     WaitForAnyKeyPress()
+
+     ##Flash + on the screen as a readying signal:
+     center.y <- gLayout.centerY
+     center.text <- "+"
+     Draw()
+     Wait(500)
+     Hide(center)
+     Draw()
+     Wait(500)
+     Show(center)
+     Draw()
+     Wait(500)
+     Hide(center)
+     Draw()
+     Wait(500)
+     Show(center)
+     Draw()
+     Wait(500)
+     Hide(center)
+     Draw()
+     Wait(500)
+
+     trial <- 1
+     loop(i,Sequence(1,Length(stimseq),1))
+     {
+
+       ##get the current design variables:
+       des <- Nth(stimseq,i)
+
+      timestart <- GetTime()
+      offtime <- timestart + ontime
+      endtrialtime <- timeStart + isi - 250
+
+      if(doText)
+      {
+	tmpText <- Nth(dim1Widgets, Nth(dim1stim,i))
+	Show(tmpText)
+	## Schedule hiding stimulus after 500ms
+        RegisterEvent("<TIMER>", 1, offtime,"<GEQ>","HideStimulus", [tmpText])
+      }
+
+     if(doSpatial)
+     {
+     	tmpSquare <- Nth(dim2Widgets, Nth(dim2stim,i))
+	Show(tmpSquare)
+	## Schedule hiding stimulus after 500ms
+        RegisterEvent("<TIMER>", 1, offtime,"<GEQ>","HideStimulus", [tmpSquare])
+     }
+
+     if(doAudio)
+     {
+	tmpAudio <- Nth(dim1audio, Nth(dim1stim,i))
+	PlayBackground(tmpAudio)
+     }
+
+     Draw()
+
+     ## Send LSL marker for stimulus onset
+     LSLMarker("stimulus_n" + n + "_d1_" + Nth(dim1stim,i) + "_d2_" + Nth(dim2stim,i) + "_trial" + trial)
+
+     ## Initialize global response tracking variables
+     gNBackTime1 <- -1
+     gNBackTime2 <- -1
+     gNBackResp1 <- ""
+     gNBackResp2 <- ""
+     gNBackStartTime <- GetTime()
+     gNBackDes <- des
+     gNBackTmpText <- 0
+     gNBackTmpSquare <- 0
+
+     ## Store current stimuli for cleanup callback
+     if(doText)
+     {
+       gNBackTmpText <- tmpText
+     }
+     if(doSpatial)
+     {
+       gNBackTmpSquare <- tmpSquare
+     }
+
+     ## Register keystroke event rules that will remove themselves
+     ## Get keys from layout
+     gLeftKey <- First(gLayout.responseMode.keys)
+     gRightKey <- Second(gLayout.responseMode.keys)
+
+     ## Only register keys for active dimensions
+     ## respfilter = [doAudio or doText, doSpatial]
+     if(First(respfilter))
+     {
+       RegisterEvent("<KEY_PRESS>", gLeftKey, 1, "<EQUAL>", "HandleLeftKey", [0])
+     }
+     if(Second(respfilter))
+     {
+       RegisterEvent("<KEY_PRESS>", gRightKey, 1, "<EQUAL>", "HandleRightKey", [0])
+     }
+
+     ## Register end-of-trial timeout (ends loop)
+     RegisterEvent("<TIMER>", 1, endtrialtime, "<GEQ>", "", [0])
+
+     ## Start event loop and wait for timeout
+     StartEventLoop()
+     ClearEventLoop()
+
+     ## Calculate responses and RTs from globals
+     if(gNBackTime1 >= 0)
+     {
+       resp1 <- gNBackResp1
+       time2 <- gNBackTime1
+       LSLMarker("response1_" + resp1)
+     } else {
+       resp1 <- "<timeout>"
+       time2 <- -1
+       LSLMarker("response1_timeout")
+     }
+
+     if(gNBackTime2 >= 0)
+     {
+       resp2 <- gNBackResp2
+       time3 <- gNBackTime2
+       LSLMarker("response2_" + resp2)
+     } else {
+       resp2 <- "<timeout>"
+       time3 <- -1
+     }
+
+     ## Calculate correctness
+     corr1 <- Nth(des,1)==0
+     corr2 <- Nth(des,2)==0
+
+     if(resp1 == gLeftSemantic)
+     {
+       corr1 <- Nth(des,1)
+     }
+     if(resp1 == gRightSemantic)
+     {
+       corr2 <- Nth(des,2)
+     }
+     if(resp2 == gLeftSemantic)
+     {
+       corr1 <- Nth(des,1)
+     }
+     if(resp2 == gRightSemantic)
+     {
+       corr2 <- Nth(des,2)
+     }
+
+     ## Send accuracy markers
+     if(corr1)
+     {
+       LSLMarker("dim1_correct")
+     } else {
+       LSLMarker("dim1_error")
+     }
+     if(corr2)
+     {
+       LSLMarker("dim2_correct")
+     } else {
+       LSLMarker("dim2_error")
+     }
+
+     Draw()
+     Wait(250)
+
+     ## Print debug info to console
+     Print("Trial " + trial + ": Resp1=[" + resp1 + "] RT1=" + time2 + "  Resp2=[" + resp2 + "] RT2=" + time3)
+
+     Draw()
+
+
+
+     FilePrint(gFileOut,gSubNum+","+gblock+","+trial+","+  dim1 + ","+dim2+","+
+               nDim+","+n+","+isi+"," +
+	       Nth(des,1)+","+Nth(des,2)+","+Nth(des,3)+","+Nth(des,4)+","+
+	       doText+","+ doAudio+","+doSpatial+","+ timestart+","+
+	       resp1 + ","+corr1+"," + time2 + "," + time2 + ","+
+	       resp2 + ","+corr2+"," + time3 + "," + time3       )
+
+
+     WaitUntil(timestart+isi)
+     trial <- trial + 1
+
+    }
+}
+
+
+
+define LoadSounds(list)
+{
+  newlist <- []
+  loop(i,list)
+  {
+    PushOnEnd(newlist,LoadSound(i+".ogg"))
+  }
+  return newlist
+}
+
+
+define WaitUntil(time)
+{
+
+     RegisterEvent("<TIMER>", 1, time,"<GEQ>","", [])
+     StartEventLoop()  #Start the timer
+     ClearEventLoop()  #clear it out when done.
+
+}
+
+
+define SampleExcept(list,value)
+{
+  test <- value
+  while(test == value)
+  {
+    test <- Sample(list)
+  }
+  return test
+}
+
+
+
+define GetStrings(lang)
+{
+  gStrings <- GetTranslations("nback",lang)
+
+}
+
+## Helper function to replace MessageBox with AdaptiveTextBox
+define MessageKeyBox(message, win)
+{
+  ## Substitute <LEFT> and <RIGHT> placeholders with actual response key names
+  text <- message
+  if(VariableExists("gLeftKeyName"))
+  {
+    ## SubstituteStrings expects list of [find, replace] pairs
+    text <- SubstituteStrings(text, [["<LEFT>", gLeftKeyName], ["<RIGHT>", gRightKeyName]])
+  }
+
+  ## stimulusRegion is a bounding box with x, y, width, height
+  box <- AdaptiveTextBox(text,
+                         gLayout.stimulusRegion.x,
+                         gLayout.stimulusRegion.y,
+                         win,
+                         22,
+                         gLayout.stimulusRegion.width,
+                         gLayout.stimulusRegion.height,
+                         1, 30)
+  AddObject(box, win)
+  Draw()
+  WaitForAnyKeyPress()
+  RemoveObject(box, win)
+  Draw()
+}
+
+## Event callback: Handle left key press during trial
+define HandleLeftKey(p, p2)
+{
+  ## Only record first response with this key (prevent duplicates)
+  ## Check if this semantic value was already recorded
+  if(not (gNBackResp1 == gLeftSemantic or gNBackResp2 == gLeftSemantic))
+  {
+    ## Bold the left response label for visual feedback
+    SetFont(gLeftLabel, gLayout.footer.font)
+    Draw()
+
+    ## Schedule unbolding after 150ms (only for left label)
+    unboldTime <- GetTime() + 150
+    RegisterEvent("<TIMER>", 1, unboldTime, "<GEQ>", "UnboldLeftLabel", [0])
+
+    ## Record response time and semantic value
+    ## Use whichever global is still -1 (first response gets gNBackTime1)
+    if(gNBackTime1 < 0)
+    {
+      gNBackTime1 <- GetTime() - gNBackStartTime
+      gNBackResp1 <- gLeftSemantic
+    } else {
+      gNBackTime2 <- GetTime() - gNBackStartTime
+      gNBackResp2 <- gLeftSemantic
+    }
+  }
+}
+
+## Event callback: Handle right key press during trial
+define HandleRightKey(p, p2)
+{
+  ## Only record first response with this key (prevent duplicates)
+  ## Check if this semantic value was already recorded
+  if(not (gNBackResp1 == gRightSemantic or gNBackResp2 == gRightSemantic))
+  {
+    ## Bold the right response label for visual feedback
+    SetFont(gRightLabel, gLayout.footer.font)
+    Draw()
+
+    ## Schedule unbolding after 150ms (only for right label)
+    unboldTime <- GetTime() + 150
+    RegisterEvent("<TIMER>", 1, unboldTime, "<GEQ>", "UnboldRightLabel", [0])
+
+    ## Record response time and semantic value
+    ## Use whichever global is still -1 (first response gets gNBackTime1)
+    if(gNBackTime1 < 0)
+    {
+      gNBackTime1 <- GetTime() - gNBackStartTime
+      gNBackResp1 <- gRightSemantic
+    } else {
+      gNBackTime2 <- GetTime() - gNBackStartTime
+      gNBackResp2 <- gRightSemantic
+    }
+  }
+}
+
+## Event callback: Hide stimulus widget after ontime
+define HideStimulus(widget, p2)
+{
+  Hide(widget)
+  Draw()
+}
+
+## Event callback: Unbold left response label after brief display
+define UnboldLeftLabel(p, p2)
+{
+  SetFont(gLeftLabel, gOriginalFont)
+  Draw()
+}
+
+## Event callback: Unbold right response label after brief display
+define UnboldRightLabel(p, p2)
+{
+  SetFont(gRightLabel, gOriginalFont)
+  Draw()
+}
+
+## Event callback: Cleanup at end of trial (called by timeout)
+define CleanupTrial(p, p2)
+{
+  ## Unbold both response labels (in case they're still bold)
+  SetFont(gLeftLabel, gOriginalFont)
+  SetFont(gRightLabel, gOriginalFont)
+
+  ## Hide any remaining stimuli
+  if(gNBackTmpText != 0)
+  {
+    Hide(gNBackTmpText)
+  }
+  if(gNBackTmpSquare != 0)
+  {
+    Hide(gNBackTmpSquare)
+  }
+
+  Draw()
+
+  ## This callback ends the event loop (no need to explicitly call anything)
+  ## The empty callback name "" in RegisterEvent causes loop to end
+}

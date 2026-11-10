@@ -1,0 +1,12 @@
+{
+  "HEADER": "Math Processing",
+  "BLOCK": "Block",
+  "INST1A": "<b>Math Processing Task</b><br><br>In this task, you must solve simple addition and subtraction problems to determine whether the correct answer is <b>greater than</b> or <b>less than</b> 5.<br><br>The two possible responses are:<br>- <b>Less than 5</b> (left response)<br>- <b>Greater than 5</b> (right response)<br><br>No problem will ever have the value 5 as the correct answer.<br><br>Press any key to continue.",
+  "INST1B": "You start each block by pressing any key. Each block lasts for 3 minutes. Math problems appear one at a time, and should be solved <b>from left to right</b>. Always perform the additions and subtractions in the order they appear.<br><br>As soon as you respond, a new problem will appear. Try to be <b>as fast and accurate as possible</b>. If you start making errors because you are going too fast, slow down.<br><br>At the end of each 3-minute block, the task will automatically stop.<br><br>Press any key to continue.",
+  "INST1C": "The number of operations in each problem will vary between blocks. Some blocks will have problems with 2 numbers, others with 3 or 4 numbers. Within a block, all problems have the same number of operations.<br><br>Press any key to begin.",
+  "INTERBLOCK": "The problems in this block will all have <LENGTH> numbers. You have a deadline of <DEADLINE> seconds to solve each one.<br><br>Press any key to begin.",
+  "DEBRIEF": "This test is complete. Press any key to continue.",
+  "CORRECT": "Correct",
+  "INCORRECT": "Incorrect",
+  "TOOSLOW": "Too Slow"
+}

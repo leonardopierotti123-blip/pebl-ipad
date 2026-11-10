@@ -1,0 +1,990 @@
+//* -*- mode:C++; tab-width:4; c-basic-offset:4; indent-tabs-mode:nil -*- */
+/////////////////////////////////////////////////////////////////////////////////
+//    Name:       src/platforms/sdl/PlatformAudioIn.cpp
+//    Purpose:    Contains platform-specific audio recording routines
+//    Author:     Shane T. Mueller, Ph.D.
+//    Copyright:  (c) 2011-2026 Shane T. Mueller <smueller@obereed.net>
+//    License:    GPL 2
+//
+//
+//
+//     This file is part of the PEBL project.
+//
+//    PEBL is free software; you can redistribute it and/or modify
+//    it under the terms of the GNU General Public License as published by
+//    the Free Software Foundation; either version 2 of the License, or
+//    (at your option) any later version.
+//
+//    PEBL is distributed in the hope that it will be useful,
+//    but WITHOUT ANY WARRANTY; without even the implied warranty of
+//    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+//    GNU General Public License for more details.
+//
+//    You should have received a copy of the GNU General Public License
+//    along with PEBL; if not, write to the Free Software
+//    Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+////////////////////////////////////////////////////////////////////////////////
+
+#include "PlatformAudioIn.h"
+#include "PlatformAudioOut.h"
+
+//#include "../../devices/PAudioIn.h"
+
+#include "../../utility/PEBLPath.h"
+#include "../../utility/PError.h"
+#include "../../libs/PEBLEnvironment.h"
+
+
+#ifdef PEBL_EMSCRIPTEN
+#include "../../base/Evaluator-es.h"
+#else
+#include "../../base/Evaluator.h"
+#endif
+
+#include "../../base/PList.h"
+#include "../../base/PComplexData.h"
+
+
+#ifdef PEBL_OSX
+#include "SDL.h"
+#else
+#include "SDL.h"
+#endif
+
+#ifdef PEBL_AUDIOIN
+//#include "SDL_audioin.h"
+
+#include <cmath>
+#include <vector>
+#include <fstream>
+
+void AudioInCallbackFill(void * udata, Uint8 * stream, int len);
+void AudioInCallbackLoop(void * udata, Uint8 * stream, int len);
+
+//initiate static data for callback.
+//extern AudioInfo *gWaveStream=NULL;
+AudioInfo *gAudioBuffer = NULL;  // Global buffer pointer (definition, not declaration)
+
+using std::string;
+using std::cerr;
+// cout removed - use cerr for debug output
+using std::endl;
+using namespace std;
+
+PlatformAudioIn::PlatformAudioIn()
+    //    PEBLObjectBase(CDT_AUDIOIN)
+{
+    //Initialize audio device to 0 (uninitialized)
+    mAudioDevice = 0;
+
+    //Default audio settings
+    mSampleRate = 44100;
+    mAudioFormat = AUDIO_S16;
+    mBytesPerSample = 2;
+    mSamples = 256;
+    // mWave is automatically initialized to NULL by counted_ptr constructor
+}
+
+
+
+PlatformAudioIn::~PlatformAudioIn()
+{
+    std::cerr << "~PlatformAudioIn: Destructor called\n";
+
+    // Close SDL2 audio device
+    if(mAudioDevice > 0)
+    {
+        std::cerr << "~PlatformAudioIn: Closing audio device " << mAudioDevice << "\n";
+        SDL_CloseAudioDevice(mAudioDevice);
+        mAudioDevice = 0;
+    }
+
+    // Clear the global buffer pointer if it points to our buffer
+    if(mWave.get() && mWave.get() == gAudioBuffer)
+    {
+        std::cerr << "~PlatformAudioIn: Clearing gAudioBuffer\n";
+        gAudioBuffer = NULL;
+    }
+
+    std::cerr << "~PlatformAudioIn: Destructor complete\n";
+    // counted_ptr will automatically handle reference counting and deletion
+    // No manual memory management needed!
+}
+
+
+
+
+//This must be called after the audio is initialized but before it can
+//be used for recording. It opens the audio device for capture.
+bool PlatformAudioIn::Initialize(int type)
+{
+    // SDL2 audio already initialized in main PEBL startup (SDL_Init(SDL_INIT_AUDIO))
+
+    SDL_AudioSpec want, have;
+    SDL_zero(want);
+
+    want.freq = mSampleRate;        // 44100
+    want.format = mAudioFormat;     // AUDIO_S16
+    want.channels = 1;              // Mono
+    want.samples = mSamples;        // 256
+    want.userdata = &have;
+
+    // Select which callback should be used
+    if(type == 1)
+    {
+        want.callback = AudioInCallbackFill;
+    }
+    else
+    {
+        want.callback = AudioInCallbackLoop;
+    }
+
+    // List all available recording devices
+    int numDevices = SDL_GetNumAudioDevices(SDL_TRUE);
+    // Commented out for production - enable for debugging
+    // std::cerr << "====================================\n";
+    // std::cerr << "Available audio recording devices: " << numDevices << "\n";
+    // for(int i = 0; i < numDevices; i++) {
+    //     const char* name = SDL_GetAudioDeviceName(i, SDL_TRUE);
+    //     std::cerr << "  Device " << i << ": " << (name ? name : "NULL") << "\n";
+    // }
+
+    // Try to find the built-in digital microphone (avoid headphone jack)
+    // Look for "Digital Microphone" in the device name
+    int deviceIndex = 0;  // Default to first device
+    for(int i = 0; i < numDevices; i++) {
+        const char* name = SDL_GetAudioDeviceName(i, SDL_TRUE);
+        if(name && strstr(name, "Digital Microphone")) {
+            deviceIndex = i;
+            // std::cerr << "Found Digital Microphone at index " << i << "\n";
+            break;
+        }
+    }
+
+    // Get the selected recording device
+    const char* deviceName = SDL_GetAudioDeviceName(deviceIndex, SDL_TRUE);
+    if(!deviceName)
+    {
+        PError::SignalWarning("No audio recording device found");
+        return false;
+    }
+
+    // std::cerr << "Opening device " << deviceIndex << ": " << deviceName << "\n";
+
+    // Open capture device (SDL_TRUE = recording)
+    mAudioDevice = SDL_OpenAudioDevice(deviceName, SDL_TRUE, &want, &have, 0);
+    if(mAudioDevice == 0)
+    {
+        std::string errorMsg = std::string("Cannot open audio input device: ") + SDL_GetError();
+        PError::SignalWarning(errorMsg);
+        return false;
+    }
+
+    // std::cerr << "Device opened successfully!\n";
+    // std::cerr << "  Requested: " << want.freq << "Hz, " << (int)want.channels << " channels, format=" << want.format << "\n";
+    // std::cerr << "  Got:       " << have.freq << "Hz, " << (int)have.channels << " channels, format=" << have.format << "\n";
+    // std::cerr << "  Samples:   " << have.samples << "\n";
+    // std::cerr << "====================================\n";
+
+    // Update actual specs if they differ from requested
+    mSampleRate = have.freq;
+    mAudioFormat = have.format;
+
+    return true;
+}
+
+
+counted_ptr<AudioInfo> PlatformAudioIn::GetAudioOutBuffer()
+{
+    return mWave;  // Return copy of counted_ptr (increments reference count)
+}
+
+
+
+
+counted_ptr<AudioInfo> PlatformAudioIn::ReleaseAudioOutBuffer()
+{
+    counted_ptr<AudioInfo> tmp = mWave;  // Copy the counted_ptr
+    mWave = counted_ptr<AudioInfo>();  // Reset to NULL, releasing our reference
+
+    return tmp;  // Return the counted_ptr
+}
+
+//
+//  This attaches a buffer within the PlatformAudioOut to use
+
+bool PlatformAudioIn::UseBuffer( counted_ptr<AudioInfo> buffer )
+{
+    if(mWave.get())
+    {
+        PError::SignalFatalError("Attempting to add a buffer to an input stream that already has one.\n");
+    }
+    else
+    {
+        // Store the counted_ptr - this increments the reference count
+        mWave = buffer;
+        gAudioBuffer = mWave.get();
+
+        mSampleRate= mWave->spec.freq;
+        mAudioFormat=mWave->spec.format;
+        if((buffer->spec.format == AUDIO_U8) |
+           (buffer->spec.format == AUDIO_S8) )
+        {
+            mBytesPerSample = 1;
+        }
+        else if((buffer->spec.format == AUDIO_S16 )|
+                 (buffer->spec.format == AUDIO_U16))
+        {
+            mBytesPerSample=2;
+        }
+        mWave->bytesPerSample = mBytesPerSample;
+        mSamples = buffer->audiolen/mBytesPerSample;
+    }
+    return true;
+}
+
+
+// This creates a buffer to capture stuff to.
+//size is the size, in ms that needs to be created,
+//at a sampling frequency determined by the class
+bool PlatformAudioIn::CreateBuffer(int size)
+{
+    if(mWave.get())
+    {
+        PError::SignalFatalError("Attempting to add a buffer to an input stream that already has one.\n");
+    }
+
+    // Create a new AudioInfo object wrapped in counted_ptr
+    mWave = counted_ptr<AudioInfo>(new AudioInfo());
+    std::cerr << "CreateBuffer: Created AudioInfo object at " << (void*)mWave.get() << "\n";
+
+    //Make a SDL_AudioSpec;
+    SDL_AudioSpec *spec = (SDL_AudioSpec *) malloc(sizeof(SDL_AudioSpec));
+    spec->freq =44100;
+    spec->format=AUDIO_S16;
+    spec->channels=1;
+    spec->silence=0x80;
+    spec->samples=256;  //4096
+    spec->callback= NULL;  //Don't have a callback for playing here.
+    spec->userdata=NULL;
+
+    Uint32 length = spec->freq * size/1000;
+    mWave->spec = *spec;
+
+    //allocate the buffer:
+    Uint32 bufferSize = mBytesPerSample*length;
+    mWave->audio = (Uint8*)malloc(bufferSize);
+    std::cerr << "CreateBuffer: Allocated " << bufferSize << " bytes at " << (void*)mWave->audio << "\n";
+    if(mWave->audio)
+    {
+        //            cerr << "Memory allocated\n";
+    }
+    else
+    {
+        PError::SignalFatalError("Unable to allocate audio input buffer\n");
+    }
+
+    mWave->bytesPerSample= mBytesPerSample;
+    mWave->audiolen = mBytesPerSample*length;
+    mWave->audiopos = 0;
+    mWave->recordpos = 0;
+    mWave->counter = 0;
+    mWave->name = NULL;
+
+    //attach the buffer to the extern global buffer so that the callback can use it:
+    gAudioBuffer = mWave.get();
+    std::cerr << "CreateBuffer: Set gAudioBuffer to " << (void*)gAudioBuffer << "\n";
+#if 0
+    cerr << "---------------------------\n";
+    cerr << "Creating buffer: \n";
+    cerr << "Bytespersample: " << mBytesPerSample << endl;
+    cerr << "Size (samples):  "  << size << endl;
+    cerr << "Size (bytes):     " << mWave->audiolen << endl;
+    cerr << "freq     "<<mWave->spec.freq <<endl;
+    cerr << "length:  " <<mWave->audiolen<< endl;
+    cerr << "---------------------------\n";
+#endif
+
+    return true;
+}
+
+
+bool PlatformAudioIn::RecordToBuffer()
+{
+    if(mAudioDevice == 0)
+    {
+        PError::SignalWarning("Audio device not initialized");
+        return false;
+    }
+
+    // std::cerr << "RecordToBuffer: Unpausing audio device " << mAudioDevice << "\n";
+    SDL_PauseAudioDevice(mAudioDevice, 0);  // 0 = unpause/start recording
+
+    // Check the status (commented out for production)
+    // SDL_AudioStatus status = SDL_GetAudioDeviceStatus(mAudioDevice);
+    // std::cerr << "Audio device status after unpause: " << status
+    //           << " (SDL_AUDIO_PLAYING=" << SDL_AUDIO_PLAYING << ")\n";
+
+    return true;
+}
+
+
+bool PlatformAudioIn::PauseAudioMonitor()
+{
+    if(mAudioDevice == 0)
+    {
+        return false;
+    }
+
+    SDL_PauseAudioDevice(mAudioDevice, 1);  // 1 = pause recording (device remains open)
+    return true;
+}
+
+
+bool PlatformAudioIn::CloseAudio()
+{
+    if(mAudioDevice == 0)
+    {
+        return false;  // Already closed
+    }
+
+    std::cerr << "CloseAudio: Starting cleanup (device=" << mAudioDevice << ")\n";
+
+    // CRITICAL: Lock the audio device to prevent callbacks from running
+    // This ensures thread-safe access to gAudioBuffer
+    SDL_LockAudioDevice(mAudioDevice);
+
+    // Pause device while locked
+    SDL_PauseAudioDevice(mAudioDevice, 1);
+
+    // Clear global buffer pointer while holding the lock
+    // Any callbacks that were queued will now see NULL and exit immediately
+    if(mWave.get() && mWave.get() == gAudioBuffer)
+    {
+        std::cerr << "CloseAudio: Clearing gAudioBuffer\n";
+        gAudioBuffer = NULL;
+    }
+
+    // Unlock to allow any queued callbacks to see NULL and exit
+    SDL_UnlockAudioDevice(mAudioDevice);
+
+    // Wait for callbacks to fully drain
+    // Increased from 50ms to 200ms to ensure all queued callbacks complete
+    std::cerr << "CloseAudio: Waiting for callbacks to drain...\n";
+    PEBLEnvironment::myTimer.Sleep(200);
+
+    // Now safe to close device - all callbacks have exited
+    std::cerr << "CloseAudio: Closing SDL device\n";
+    SDL_CloseAudioDevice(mAudioDevice);
+    mAudioDevice = 0;
+
+    // Release our counted_ptr reference
+    // AudioInfo now has a destructor that will free the malloc'd buffer
+    // when the last reference is released
+    if(mWave.get())
+    {
+        std::cerr << "CloseAudio: Releasing AudioInfo counted_ptr (destructor will free buffer when refcount=0)\n";
+        mWave = counted_ptr<AudioInfo>();  // Reset to NULL, releasing our reference
+    }
+
+    std::cerr << "CloseAudio: Complete\n";
+
+    return true;
+}
+
+
+// simple voicekey.  It will process a buffer, computing power
+// for 10-ms windows every 1 ms.  It will 'trip' when 95% of the 1-ms windows
+// have power greater than the threshold for sustain, and stop when
+// the power goes below the threshold for 95% of the time for sustain/2.
+// It then reprocesses the power stream to find the point at which the
+// power went above the threshold.
+
+Variant PlatformAudioIn::VoiceKey(double threshold, unsigned int sustain)
+{
+
+
+
+    //how big a chunk, in samples, will 1 ms of time take up?
+
+    int binspersec=1000;
+
+    //this is the number of samples (not bytes) per chunk
+    unsigned int chunksize = mSampleRate/binspersec;
+    double msperchunk = (double)mSampleRate/chunksize/1000;
+
+    //number of samples needed for the sustain parameter.
+    unsigned int sustainSamples = sustain/msperchunk;
+
+
+    //This should be conditional:
+    //Initialize(1);
+    //    CreateBuffer(samples);
+
+
+    //audio will immediately be filling up the buffer.  When full,
+    //recording will stop, but we can potentially stop it any time
+    //prior to that too.
+
+
+    //buffer duration in chunks (roughly 1-ms)
+#if 0
+    cerr << "------------------------\n";
+    cerr <<"Computing buffer time\n";
+    cerr << "audiolen: " << mWave->audiolen << endl;
+    cerr << "bytespersample " << mWave->bytesPerSample << endl;
+    cerr << "bytes:         " << mBytesPerSample << endl;
+
+    cerr << "chunksize: " << chunksize << endl;
+#endif
+
+    int buffertime = double(mWave->audiolen)/mBytesPerSample/chunksize;
+    //Make a power buffer equal to the number of ms in the sample buffer.
+    std::vector<double> powerbins = std::vector<double>(buffertime);
+
+    bool trip = false;
+    bool stop = 0;
+    unsigned int triptime = 0;
+    unsigned int offtime = 0;  //The time the speech stops.
+    unsigned int tickID=0;
+    unsigned int sampleID=0;
+
+    mWave->recordpos =0;
+    mWave->counter = 0;
+    //we should blank out the audio that is in here.
+    memset(mWave->audio,0,mWave->audiolen);
+
+    //start audio recording.
+    RecordToBuffer();
+#if 0
+    cerr << "recording\n";
+    //    cerr << "timeout:        " << timeout << endl;
+    cerr << "chunksize:      " << chunksize << endl;
+    cerr << "msperchunk:     " << msperchunk << endl;
+    cerr << "sustain:        " << sustain << endl;
+    cerr << "sustainsamples: " << sustainSamples << endl;
+    cerr << "power bins:     " << buffertime << endl;
+
+#endif
+
+    int abovecount = 0;
+
+    //This is not thread-safe.
+
+
+    double powr;
+    double energy;
+    double power;
+    int signs;
+    int directions;
+    double rmssd;
+    while(!stop)
+        {
+
+
+            //process another bin as long as the recording position is greater than
+            //one bin ahead.  Transform into samples first.
+            //cerr << gAudioBuffer->recordpos/mBytesPerSample << ":" << (chunksize+sampleID) << endl;
+            while((gAudioBuffer->recordpos/mBytesPerSample) > chunksize+sampleID)
+                {
+                    //cerr <<"    buffering "<< sampleID <<":"<< gAudioBuffer->recordpos <<" " << (gAudioBuffer->recordpos - sampleID)  << "  " << samples << endl;
+
+                    // CRITICAL: Bounds check BEFORE any operations
+                    // This prevents buffer overflow in powerbins vector
+                    if(tickID >= buffertime)
+                    {
+                        std::cerr << "Voice key: Buffer full without detection (tickID=" << tickID
+                                  << " >= buffertime=" << buffertime << ")\n";
+                        stop = true;
+                        break;
+                    }
+
+                    //power[tickID] = ;
+
+                    ComputeStats((Sint16*)(gAudioBuffer->audio+sampleID*mBytesPerSample),chunksize,
+                          energy,power,signs,directions,rmssd);
+
+                    powerbins[tickID] = energy;
+                    //powr = Power((Sint16*)(gAudioBuffer->audio+sampleID*mBytesPerSample),chunksize);
+
+                    //The following produces 'mini-scopes for each statistic we compute.
+#if 0
+
+                    cerr << SDL_GetTicks();
+               //power
+                    cerr << "[";
+                    int k;
+                    for(k = 0; k< 10*power;k++)cerr<<" "<<std::flush;
+                    //cerr << power << endl;
+                    cerr << "*";
+                    for(int j=k; j<10; j++) cerr << " ";
+                    cerr << "]";
+
+                    //energy
+
+                    cerr << "[";
+                    for(k = 0; k< 10*energy;k++)cerr<<" "<<std::flush;
+                    cerr << "*";
+                    for(int j=k; j<10; j++) cerr << " ";
+                    cerr << "]";
+
+                    //signs
+                    cerr << "[";
+                    for(k = 0; k< 10.0*signs/chunksize;k++)cerr<<" "<<std::flush;
+                    cerr << "*";
+                    for(int j=k; j<10; j++) cerr << " ";
+                    cerr << "]";
+
+                    //directions
+                    cerr << "[";
+                    for(k = 0; k< 10.0*directions/chunksize;k++)cerr<<" "<<std::flush;
+                    cerr << "*";
+                    for(int j=k; j<10; j++) cerr << " ";
+                    cerr << "]";
+                    cerr << endl;
+
+
+#endif
+
+                    //                    cerr << "X" << powr << " "  << energy << " " << power << " " << signs << " " << directions << " " << rmssd << endl;
+
+                    //if(powerbins[tickID] > threshold)          cerr << "********** " << abovecount <<endl;
+
+
+                    int incoming = (powerbins[tickID]>threshold);
+                    int outgoing = (tickID < sustainSamples)? 0:powerbins[tickID-sustainSamples]>threshold;
+                    abovecount += incoming - outgoing;
+                    //cerr << ((double)abovecount)/sustainSamples ;
+                    if(((double)abovecount)/sustainSamples > .55  &trip==false)
+                                            {
+                                                trip = true;
+                                                triptime = tickID -(sustainSamples*.55);
+                                                //cerr << "!!!!!!!!!!!!!!!!!!VOICE KEY TRIPPED!!!!!!!!!!!!!!!!!!\n" ;
+                                            }
+
+                    if(trip)
+                        {
+                            //cerr << "*****************";
+                            //If we have tripped, see if 50% or more of the
+                            //samples are below the threshold.
+                            if((double)abovecount/sustainSamples < .2)
+                                {
+                                    //cerr << "<<<<<<<<<<<<<";
+                                    //stop recording.
+                                    PauseAudioMonitor();
+                                    stop = true;
+                                    offtime = tickID- (sustainSamples*.8);
+                                }
+
+
+                        }
+                    //cerr << endl;
+
+
+
+                    tickID++;
+                    sampleID += chunksize;
+
+
+                    if(sampleID+chunksize >= gAudioBuffer->audiolen/mBytesPerSample)
+                        stop = true;
+
+
+                    //                    cerr << sampleID << " > "<< gAudioBuffer->audiolen << " -----";
+                    //                    cerr <<tickID << " " << stop;
+                }
+            PEBLEnvironment::myTimer.Sleep(1);
+        }
+
+
+
+    // triptime = triptime * msperchunk
+    // tripped = trip
+    // offtime = offtime * msperchunk
+
+    std::cerr << "VoiceKey: Creating return value (triptime=" << (triptime * msperchunk)
+              << ", offtime=" << (offtime * msperchunk) << ", trip=" << trip << ")\n";
+
+    std::cerr << "VoiceKey: About to create PList...\n";
+    PList * newlist = new PList();
+    std::cerr << "VoiceKey: PList created at " << (void*)newlist << "\n";
+
+    std::cerr << "VoiceKey: Pushing back values...\n";
+    newlist->PushBack(Variant(triptime * msperchunk));
+    newlist->PushBack(Variant(offtime * msperchunk));
+    newlist->PushBack(Variant(trip));
+    //    cerr << "Returning: " << *newlist << endl;
+
+    std::cerr << "VoiceKey: Creating counted_ptr<PEBLObjectBase>...\n";
+    counted_ptr<PEBLObjectBase> baselist = counted_ptr<PEBLObjectBase>(newlist);
+    std::cerr << "VoiceKey: counted_ptr created\n";
+
+    std::cerr << "VoiceKey: Creating PComplexData...\n";
+    PComplexData * pcd = new PComplexData(baselist);
+    std::cerr << "VoiceKey: PComplexData created\n";
+
+    //cerr << "Saving to out.wav\n";
+    //SaveBufferToWave("out.wav");
+
+    std::cerr << "VoiceKey: Returning Variant\n";
+    return Variant(pcd);
+}
+
+
+void PlatformAudioIn::SaveBufferToWave(Variant filename)
+{
+    //Code here adapted from
+    //http://www.codeproject.com/Messages/3208219/How-to-write-mic-data-to-wav-file.aspx
+
+	int bitsPerSample = mBytesPerSample*8;
+
+    //Unclear about these chunk things:
+	int subchunk1size = 16;
+	int numChannels = mWave->spec.channels;
+	int subchunk2size = mWave->recordpos;
+	int chunksize = 36+subchunk2size;
+
+
+	int audioFormat = 1;  //PCM
+
+    int sampleRate = mWave->spec.freq;
+	int byteRate = mWave->spec.freq*numChannels*bitsPerSample/8;
+	int blockAlign = numChannels*bitsPerSample/8;
+
+
+    std::fstream myFile (filename.GetString().c_str(), ios::out | ios::binary);
+
+	// write the wav file per the wav file format
+	myFile.seekp (0, ios::beg);
+	myFile.write ("RIFF", 4);					// chunk id
+	myFile.write ((char*) &chunksize, 4);	    // chunk size (36 + SubChunk2Size))
+	myFile.write ("WAVE", 4);					// format
+	myFile.write ("fmt ", 4);					// subchunk1ID
+	myFile.write ((char*) &subchunk1size, 4);	// subchunk1size (16 for PCM)
+	myFile.write ((char*) &audioFormat, 2);		// AudioFormat (1 for PCM)
+	myFile.write ((char*) &numChannels, 2);		// NumChannels
+	myFile.write ((char*) &sampleRate, 4);		// sample rate
+	myFile.write ((char*) &byteRate, 4);		// byte rate (SampleRate * NumChannels * BitsPerSample/8)
+	myFile.write ((char*) &blockAlign, 2);		// block align (NumChannels * BitsPerSample/8)
+	myFile.write ((char*) &bitsPerSample, 2);	// bits per sample
+
+	myFile.write ("data", 4);					// subchunk2ID
+	myFile.write ((char*) &subchunk2size, 4);			// subchunk2size (NumSamples * NumChannels * BitsPerSample/8)
+
+	myFile.write ((char*)(mWave->audio), mWave->recordpos);	// data
+
+
+}
+
+void AudioInCallbackFill(void * udata, Uint8 * stream, int len)
+{
+    static int callbackCount = 0;
+    callbackCount++;
+
+    //len is in bytes.
+
+    //SDL_AudioSpec *spec=(SDL_AudioSpec *)udata;
+    //Sint16 *sData=(Sint16 *)stream;
+    Uint8 * sData = stream;
+
+    // int samples=(len/2);
+
+    if(gAudioBuffer)
+        {
+            //This gives the number of  left in the buffer.
+            int remaininbuffer = (gAudioBuffer->audiolen - gAudioBuffer->recordpos);
+
+
+            //We want to copy up to len bytes.  But if only as many as remain in the buffer.
+            //tocopy is how many bytes we can copy:
+            int bytestocopy = (len< remaininbuffer ? len: remaininbuffer);
+
+            // Commented out for production - enable for debugging
+            // if(callbackCount % 100 == 1) {  // Print every 100th callback
+            //     // Check if stream has any non-zero data
+            //     int nonZero = 0;
+            //     for(int i = 0; i < len && i < 100; i++) {
+            //         if(sData[i] != 0) nonZero++;
+            //     }
+            //     std::cerr << "AudioCallback #" << callbackCount
+            //               << ": len=" << len
+            //               << " recordpos=" << gAudioBuffer->recordpos
+            //               << " tocopy=" << bytestocopy
+            //               << " nonZeroInStream=" << nonZero << "/100" << std::endl;
+            // }
+
+            //stop copying if the buffer is full.
+
+            if(bytestocopy>0)
+                {
+
+                    //copy to the buffer
+                    memcpy(gAudioBuffer->audio+(gAudioBuffer->recordpos),
+                             sData,
+                             bytestocopy);
+                    gAudioBuffer->recordpos += bytestocopy;
+
+                }
+        }
+    else
+        {
+            if(callbackCount == 1) {
+                std::cerr << "WARNING: AudioCallback called but gAudioBuffer is NULL!\n";
+            }
+        }
+
+
+}
+
+
+//This implements a ring buffer that continuously records, wrapping around when full.
+//This allows continuous monitoring without stopping when the buffer fills.
+void AudioInCallbackLoop(void * udata, Uint8 * stream, int len)
+{
+    static int callbackCount = 0;
+    callbackCount++;
+
+    Uint8 * sData = stream;
+
+    if(gAudioBuffer)
+    {
+        // Ring buffer implementation: write with wrap-around
+        for(int i = 0; i < len; i++)
+        {
+            // Calculate write position with modulo for wrap-around
+            Uint32 writePos = (gAudioBuffer->recordpos + i) % gAudioBuffer->audiolen;
+            gAudioBuffer->audio[writePos] = sData[i];
+        }
+
+        // Update total bytes written (this grows indefinitely and is used to extract recent samples)
+        gAudioBuffer->recordpos += len;
+
+        // Increment callback counter (can be used to track activity)
+        gAudioBuffer->counter++;
+
+        if(callbackCount % 500 == 1) {  // Print every 500th callback
+            std::cerr << "AudioCallbackLoop #" << callbackCount
+                      << ": total_bytes=" << gAudioBuffer->recordpos
+                      << " buffer_wrap_count=" << (gAudioBuffer->recordpos / gAudioBuffer->audiolen)
+                      << std::endl;
+        }
+    }
+    else
+    {
+        if(callbackCount == 1) {
+            std::cerr << "WARNING: AudioCallbackLoop called but gAudioBuffer is NULL!\n";
+        }
+    }
+}
+
+
+
+
+
+
+// Get audio statistics for the most recent N milliseconds from the ring buffer
+// This extracts recent audio samples and computes all audio statistics
+// Returns: [energy, power, rmssd, signchanges, directions] as a PEBL list
+Variant PlatformAudioIn::GetRecentAudioStats(int milliseconds)
+{
+    if(!mWave.get() || !mWave->audio) {
+        PError::SignalWarning("No audio buffer available in GetRecentAudioStats()");
+        // Return [0, 0, 0, 0, 0]
+        PList * result = new PList();
+        result->PushBack(Variant(0.0));
+        result->PushBack(Variant(0.0));
+        result->PushBack(Variant(0.0));
+        result->PushBack(Variant(0));
+        result->PushBack(Variant(0));
+        counted_ptr<PEBLObjectBase> baseresult = counted_ptr<PEBLObjectBase>(result);
+        return Variant(new PComplexData(baseresult));
+    }
+
+    // CRITICAL: Lock audio device to prevent race conditions
+    // Audio callbacks run in separate thread and modify recordpos/audio[]
+    if(mAudioDevice > 0) {
+        SDL_LockAudioDevice(mAudioDevice);
+    }
+
+    // Calculate how many bytes we need for the requested time window
+    Uint32 bytesWanted = (milliseconds / 1000.0) * mSampleRate * mBytesPerSample;
+
+    // Clamp to buffer size
+    if(bytesWanted > mWave->audiolen) {
+        bytesWanted = mWave->audiolen;
+    }
+
+    // Get the total bytes written (this grows indefinitely in ring buffer mode)
+    Uint32 totalBytesWritten = mWave->recordpos;
+
+    // If we haven't written enough data yet, use what we have
+    if(totalBytesWritten < bytesWanted) {
+        bytesWanted = totalBytesWritten;
+    }
+
+    if(bytesWanted == 0) {
+        // No data yet - unlock before returning
+        if(mAudioDevice > 0) {
+            SDL_UnlockAudioDevice(mAudioDevice);
+        }
+        PList * result = new PList();
+        result->PushBack(Variant(0.0));
+        result->PushBack(Variant(0.0));
+        result->PushBack(Variant(0.0));
+        result->PushBack(Variant(0));
+        result->PushBack(Variant(0));
+        counted_ptr<PEBLObjectBase> baseresult = counted_ptr<PEBLObjectBase>(result);
+        return Variant(new PComplexData(baseresult));
+    }
+
+    // Calculate end position (most recent byte) with wrap-around
+    Uint32 endPos = totalBytesWritten % mWave->audiolen;
+
+    // Calculate start position
+    Uint32 startPos;
+    if(endPos >= bytesWanted) {
+        // Simple case: no wrap-around needed
+        startPos = endPos - bytesWanted;
+    } else {
+        // Wrap-around case: start position is near the end of buffer
+        startPos = mWave->audiolen - (bytesWanted - endPos);
+    }
+
+    // Extract samples from ring buffer into temporary linear buffer
+    Sint16 * tempBuffer = (Sint16*)malloc(bytesWanted);
+    if(!tempBuffer) {
+        // Unlock before returning on error
+        if(mAudioDevice > 0) {
+            SDL_UnlockAudioDevice(mAudioDevice);
+        }
+        PError::SignalWarning("Memory allocation failed in GetRecentAudioStats()");
+        PList * result = new PList();
+        result->PushBack(Variant(0.0));
+        result->PushBack(Variant(0.0));
+        result->PushBack(Variant(0.0));
+        result->PushBack(Variant(0));
+        result->PushBack(Variant(0));
+        counted_ptr<PEBLObjectBase> baseresult = counted_ptr<PEBLObjectBase>(result);
+        return Variant(new PComplexData(baseresult));
+    }
+
+    // Copy samples handling wrap-around
+    Uint32 pos = startPos;
+    for(Uint32 i = 0; i < bytesWanted; i++) {
+        ((Uint8*)tempBuffer)[i] = mWave->audio[pos];
+        pos = (pos + 1) % mWave->audiolen;
+    }
+
+    // CRITICAL: Unlock ASAP after copying data
+    // Now safe to process without holding the lock
+    if(mAudioDevice > 0) {
+        SDL_UnlockAudioDevice(mAudioDevice);
+    }
+
+    // Compute statistics using existing ComputeStats function
+    double energy, power, rmssd;
+    int signs, directions;
+
+    int numSamples = bytesWanted / mBytesPerSample;
+    ComputeStats(tempBuffer, numSamples, power, energy, signs, directions, rmssd);
+
+    // Clean up temporary buffer
+    free(tempBuffer);
+
+    // Return [energy, power, rmssd, signchanges, directions] as PEBL list
+    PList * result = new PList();
+    result->PushBack(Variant(energy));
+    result->PushBack(Variant(power));
+    result->PushBack(Variant(rmssd));
+    result->PushBack(Variant(signs));
+    result->PushBack(Variant(directions));
+
+    counted_ptr<PEBLObjectBase> baseresult = counted_ptr<PEBLObjectBase>(result);
+    return Variant(new PComplexData(baseresult));
+}
+
+
+// Computes power for a specific range.
+double PlatformAudioIn::Power (Sint16 * data, int length)
+{
+
+    double sum = 0;
+    for(int i=0;i <length; i+=mBytesPerSample)
+        {
+            double tmp = (double)abs(data[i])/32768 ;
+            sum += tmp;
+            //cerr << "     "  <<data[i] << " "<< tmp << endl;
+        }
+
+    //cerr << "Power sum on  "<<length << "bytes: " << sum << ": " ;
+
+    double power =(sum)/length;
+    return power;
+}
+
+
+
+
+
+// Computes power for a specific range.
+void PlatformAudioIn::ComputeStats (Sint16 * data, int length,
+                                    double & power,
+                                    double & energy,
+                                    int & signchanges,
+                                    int & dchanges,
+                                    double & rmssd )
+{
+
+    //This computes several stats related to  detecting
+    //onsets of speech:
+    //sign change,
+    //power
+    //RMSSD
+
+
+    double abssum = 0;
+    double sqsum = 0;
+    int signsum = 0;
+    int dirsum = 0;
+    double rmssdsum=0;
+
+    double prev=0;
+    double scaled;
+    double delta = 0;
+    double prevdelta = 0;
+
+     for(int i=0;i <length; i+=mBytesPerSample)
+        {
+
+
+            scaled = ((double)data[i])/32768;
+            //cerr << "-----"<< scaled << "|" << data[i]<<endl;
+            abssum += abs(scaled);
+            sqsum += scaled*scaled;
+            signsum += (scaled * prev)<0;
+
+            delta = scaled - prev;
+            dirsum += (delta * prevdelta) < 0;
+
+            rmssdsum += pow(delta - prevdelta,2);
+
+
+            //update
+            prev = scaled;
+            prevdelta = delta;
+
+        }
+
+    //cerr << "Power sum on  "<<length << "bytes: " << sum << ": " ;
+
+    int samples = length/mBytesPerSample;
+
+    energy = abssum/samples;
+    power  = sqrt(sqsum/samples);
+    rmssd  = sqrt(rmssdsum/samples);
+    signchanges = signsum;
+    dchanges=dirsum;
+
+}
+
+#endif

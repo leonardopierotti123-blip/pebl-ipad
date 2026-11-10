@@ -1,0 +1,7 @@
+{
+"HEADER": "Probabilistic Reversal Learning",
+"INST1": "You are about to take part in an experiment that involves learning a rule. On each trial, you will see two abstract images containing shapes of different colors.  On each trial, we will have selected one of the stimuli according to some rule.  Your task is to choose which stimulus is correct.  After you choose, we will tell you if you are correct or incorrect by showing you either a green smiley face (correct) or a red frown face (incorrect).  However, the feedback you get will not always be correct.  Use the responses indicated below to choose the left or right stimulus.\n\nPress any key to begin.",
+"BREAK": "You may now take a short break.  Press any key to continue on to the next block.",
+"INST2": "The following two patterns will be used in the next test.\n\n\nUse the responses indicated below to respond.\nPress space bar to begin.",
+"DEBRIEF": "Thank you for participating in the experiment.  Press any key to continue."
+}

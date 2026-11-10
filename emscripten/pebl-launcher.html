@@ -1,0 +1,599 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>PEBL Token-Based Test Launcher</title>
+    <style>
+        /* Force 100% zoom for consistent canvas sizing */
+        html {
+            zoom: 1.0;
+            -moz-transform: scale(1.0);
+            -moz-transform-origin: 0 0;
+        }
+        body {
+            zoom: 1.0;
+        }
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        #launcher-container {
+            max-width: 800px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 20px;
+        }
+        #status {
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 4px;
+            font-size: 16px;
+        }
+        .status-loading {
+            background-color: #e3f2fd;
+            color: #1976d2;
+        }
+        .status-error {
+            background-color: #ffebee;
+            color: #c62828;
+        }
+        .status-success {
+            background-color: #e8f5e9;
+            color: #2e7d32;
+        }
+        #pebl-container {
+            display: none;
+            margin-top: 20px;
+        }
+        /* Full-screen mode styles */
+        body.fullscreen {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+        }
+        body.fullscreen #launcher-container {
+            display: none;
+        }
+        body.fullscreen #pebl-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            margin: 0;
+            padding: 0;
+            background-color: black;
+            display: flex !important;
+            align-items: center;
+            justify-content: center;
+        }
+        body.fullscreen #canvas {
+            display: block;
+            max-width: 100%;
+            max-height: 100%;
+            width: auto;
+            height: auto;
+        }
+        /* Styles for when container is fullscreen element (browser fullscreen API) */
+        #pebl-container:fullscreen,
+        #pebl-container:-webkit-full-screen,
+        #pebl-container:-moz-full-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            margin: 0;
+            padding: 0;
+            background-color: black;
+            display: flex !important;
+            align-items: center;
+            justify-content: center;
+        }
+        #pebl-container:fullscreen #canvas,
+        #pebl-container:-webkit-full-screen #canvas,
+        #pebl-container:-moz-full-screen #canvas {
+            display: block;
+            max-width: 100%;
+            max-height: 100%;
+            width: auto;
+            height: auto;
+        }
+        .info-panel {
+            background-color: #f5f5f5;
+            padding: 15px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+        }
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            margin: 8px 0;
+        }
+        .info-label {
+            font-weight: bold;
+            color: #666;
+        }
+        .info-value {
+            color: #333;
+        }
+        #start-button {
+            display: none;
+            background-color: #4CAF50;
+            color: white;
+            padding: 15px 32px;
+            text-align: center;
+            font-size: 18px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 20px auto;
+            width: 100%;
+            max-width: 300px;
+        }
+        #start-button:hover {
+            background-color: #45a049;
+        }
+        #fullscreen-button {
+            display: none;
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            background-color: #2196F3;
+            color: white;
+            padding: 12px 24px;
+            text-align: center;
+            font-size: 16px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            z-index: 9999;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+        }
+        #fullscreen-button:hover {
+            background-color: #0b7dda;
+        }
+        /* Loading overlay for study preparation */
+        #loading-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background-color: rgba(0, 0, 0, 0.9);
+            z-index: 10000;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+        }
+        #loading-overlay.active {
+            display: flex;
+        }
+        .loading-message {
+            color: white;
+            font-size: 24px;
+            margin-bottom: 30px;
+            text-align: center;
+        }
+        .loading-spinner {
+            width: 60px;
+            height: 60px;
+            border: 6px solid #333;
+            border-top: 6px solid #4CAF50;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div id="loading-overlay">
+        <div class="loading-message">Preparing to run study...</div>
+        <div class="loading-spinner"></div>
+    </div>
+
+    <div id="launcher-container">
+        <h1>PEBL Research Study</h1>
+
+        <div id="status" class="status-loading">
+            Initializing study...
+        </div>
+
+        <div id="info-panel" class="info-panel" style="display: none;">
+            <div class="info-row">
+                <span class="info-label">Test:</span>
+                <span class="info-value" id="info-test"></span>
+            </div>
+            <div class="info-row">
+                <span class="info-label">Participant ID:</span>
+                <span class="info-value" id="info-participant"></span>
+            </div>
+            <div class="info-row">
+                <span class="info-label">Study Code:</span>
+                <span class="info-value" id="info-token"></span>
+            </div>
+        </div>
+
+        <button id="start-button">Start Test</button>
+
+        <div id="pebl-container">
+            <!-- PEBL canvas will be inserted here -->
+        </div>
+    </div>
+
+    <button id="fullscreen-button">Return to Fullscreen</button>
+
+    <script>
+        // Configuration
+        const VALIDATION_URL = '/api/validate.php';  // Absolute path from web root
+
+        // Generate browser fingerprint for participant ID
+        function generateFingerprint() {
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            ctx.textBaseline = 'top';
+            ctx.font = '14px Arial';
+            ctx.fillText('Browser fingerprint', 2, 2);
+            const canvasData = canvas.toDataURL();
+
+            const fingerprint = {
+                userAgent: navigator.userAgent,
+                language: navigator.language,
+                platform: navigator.platform,
+                screenResolution: `${screen.width}x${screen.height}`,
+                timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+                canvas: canvasData,
+                plugins: Array.from(navigator.plugins || []).map(p => p.name).join(',')
+            };
+
+            // Create hash from fingerprint
+            const fingerprintString = JSON.stringify(fingerprint);
+            let hash = 0;
+            for (let i = 0; i < fingerprintString.length; i++) {
+                const char = fingerprintString.charCodeAt(i);
+                hash = ((hash << 5) - hash) + char;
+                hash = hash & hash; // Convert to 32-bit integer
+            }
+
+            return 'FP_' + Math.abs(hash).toString(16);
+        }
+
+        // Parse URL parameters
+        function getURLParams() {
+            const params = new URLSearchParams(window.location.search);
+
+            // Get or generate participant ID
+            let participant = params.get('participant');
+            if (!participant) {
+                // Try to get from localStorage first (persistent across sessions)
+                participant = localStorage.getItem('pebl_participant_id');
+                if (!participant) {
+                    // Generate new fingerprint-based ID
+                    participant = generateFingerprint();
+                    localStorage.setItem('pebl_participant_id', participant);
+                }
+            }
+
+            return {
+                test: params.get('test'),
+                token: params.get('token'),
+                participant: participant,
+                language: params.get('language') || 'en'
+            };
+        }
+
+        // Display status message
+        function setStatus(message, type) {
+            const statusEl = document.getElementById('status');
+            statusEl.textContent = message;
+            statusEl.className = 'status-' + type;
+        }
+
+        // Display study information
+        function showInfo(params) {
+            document.getElementById('info-test').textContent = params.test;
+            document.getElementById('info-participant').textContent = params.participant;
+            document.getElementById('info-token').textContent = params.token;
+            document.getElementById('info-panel').style.display = 'block';
+        }
+
+        // Validate parameters
+        function validateParams(params) {
+            if (!params.test) {
+                setStatus('Error: Missing "test" parameter in URL', 'error');
+                return false;
+            }
+            if (!params.token) {
+                setStatus('Error: Missing "token" parameter in URL', 'error');
+                return false;
+            }
+            // participant is auto-generated if not provided, so no need to validate
+            return true;
+        }
+
+        // Validate token with server
+        async function validateToken(params) {
+            try {
+                const queryString = new URLSearchParams({
+                    token: params.token,
+                    test: params.test,
+                    participant: params.participant
+                }).toString();
+
+                const response = await fetch(`${VALIDATION_URL}?${queryString}`);
+
+                if (!response.ok) {
+                    throw new Error('Server returned error: ' + response.status);
+                }
+
+                const config = await response.json();
+
+                if (!config.valid) {
+                    throw new Error(config.error || 'Invalid study configuration');
+                }
+
+                return config;
+            } catch (error) {
+                throw new Error('Validation failed: ' + error.message);
+            }
+        }
+
+        // Write upload.json to Emscripten filesystem
+        function writeUploadConfig(Module, params, config) {
+            const uploadConfig = {
+                token: params.token,
+                test: params.test,
+                participant: params.participant,
+                uploadURL: config.uploadURL || '/api/upload'
+            };
+
+            const configJSON = JSON.stringify(uploadConfig);
+            Module.FS.writeFile('/upload.json', configJSON);
+
+            console.log('Wrote upload.json:', uploadConfig);
+        }
+
+        // Launch PEBL with command-line arguments
+        function launchPEBL(Module, params) {
+            const scriptPath = `/usr/local/share/pebl2/battery/${params.test}/${params.test}.pbl`;
+            const args = [scriptPath, '-s', params.participant];
+
+            // Add optional language parameter
+            if (params.language && params.language !== 'en') {
+                args.push('--language', params.language);
+            }
+
+            console.log('Launching PEBL with args:', args);
+
+            // Call PEBL's main function with arguments
+            Module.callMain(args);
+        }
+
+        // Main initialization function
+        async function initializePEBL() {
+            try {
+                // Get URL parameters
+                const params = getURLParams();
+
+                // Validate required parameters
+                if (!validateParams(params)) {
+                    return;
+                }
+
+                // Show study info
+                showInfo(params);
+
+                setStatus('Loading PEBL runtime...', 'loading');
+
+                // Create PEBL module (for MODULARIZE=1 builds)
+                const Module = await createPEBLModule({
+                    noInitialRun: true,  // Don't call main() automatically
+                    canvas: (function() {
+                        const canvas = document.createElement('canvas');
+                        canvas.id = 'canvas';
+                        document.getElementById('pebl-container').appendChild(canvas);
+                        return canvas;
+                    })(),
+                    print: function(text) {
+                        console.log('PEBL:', text);
+                    },
+                    printErr: function(text) {
+                        console.error('PEBL Error:', text);
+                    }
+                });
+
+                console.log('Module initialized');
+
+                // Validate token with server
+                setStatus('Validating study token...', 'loading');
+                const config = await validateToken(params);
+
+                setStatus('Ready to start test', 'success');
+
+                // Write upload.json configuration
+                writeUploadConfig(Module, params, config);
+
+                // Show start button
+                const startButton = document.getElementById('start-button');
+                startButton.style.display = 'block';
+
+                // Function to resize canvas to fill the screen
+                function resizeCanvas() {
+                    const canvas = document.getElementById('canvas');
+                    if (!canvas) return;
+
+                    // Always use window dimensions which account for browser zoom automatically
+                    // This ensures consistent sizing regardless of zoom level
+                    const width = window.innerWidth;
+                    const height = window.innerHeight;
+
+                    canvas.width = width;
+                    canvas.height = height;
+
+                    console.log('Canvas resized to:', width, 'x', height);
+                    console.log('(Window:', window.innerWidth, 'x', window.innerHeight,
+                                ', Screen:', screen.width, 'x', screen.height + ')');
+                }
+
+                // Handle start button click
+                startButton.addEventListener('click', async function() {
+                    startButton.style.display = 'none';
+                    setStatus('Test is running', 'success');
+
+                    // Show loading overlay during preparation
+                    const loadingOverlay = document.getElementById('loading-overlay');
+                    loadingOverlay.classList.add('active');
+
+                    const container = document.getElementById('pebl-container');
+                    const canvas = document.getElementById('canvas');
+
+                    console.log('Canvas element:', canvas);
+                    console.log('Canvas size before fullscreen:', canvas.width, 'x', canvas.height);
+                    console.log('Window size before fullscreen:', window.innerWidth, 'x', window.innerHeight);
+
+                    // Try to use browser's fullscreen API for better canvas sizing
+                    try {
+                        // Request fullscreen on the container element
+                        if (container.requestFullscreen) {
+                            await container.requestFullscreen();
+                        } else if (container.webkitRequestFullscreen) {
+                            await container.webkitRequestFullscreen();
+                        } else if (container.mozRequestFullScreen) {
+                            await container.mozRequestFullScreen();
+                        } else {
+                            // Fallback to CSS fullscreen if API not available
+                            document.body.classList.add('fullscreen');
+                        }
+
+                        // Wait for fullscreen transition and browser overlay to clear
+                        // Browser shows "Press ESC to exit fullscreen" message that takes ~3 seconds
+                        await new Promise(resolve => setTimeout(resolve, 3500));
+
+                    } catch (err) {
+                        console.log('Fullscreen API not supported, using CSS fallback:', err);
+                        document.body.classList.add('fullscreen');
+                    }
+
+                    // Make container visible
+                    container.style.display = 'flex';
+
+                    console.log('Window size after fullscreen:', window.innerWidth, 'x', window.innerHeight);
+
+                    // Resize canvas to fill the screen BEFORE launching PEBL
+                    resizeCanvas();
+
+                    console.log('Canvas size after resize:', canvas.width, 'x', canvas.height);
+                    console.log('About to launch PEBL with canvas at:', canvas.width, 'x', canvas.height);
+
+                    // NOTE: We deliberately do NOT add window resize listeners here
+                    // because resizing the canvas after PEBL initializes causes
+                    // SDL surface misalignment issues. The canvas size is set once
+                    // and maintained throughout the test.
+
+                    // Launch PEBL after canvas is properly sized
+                    launchPEBL(Module, params);
+
+                    console.log('PEBL launched');
+
+                    // Hide loading overlay after PEBL has initialized and first frame is ready
+                    // Give PEBL an extra moment to render its first screen
+                    setTimeout(() => {
+                        loadingOverlay.classList.remove('active');
+                    }, 800);
+
+                    // Set up fullscreen button functionality AFTER test has launched
+                    const fullscreenButton = document.getElementById('fullscreen-button');
+                    let peblLaunched = true;  // Flag to prevent ANY canvas resizing after PEBL launch
+
+                    // Function to re-enter fullscreen
+                    fullscreenButton.addEventListener('click', async function() {
+                        try {
+                            const container = document.getElementById('pebl-container');
+                            const canvas = document.getElementById('canvas');
+
+                            console.log('Before re-entering fullscreen:');
+                            console.log('  Window size:', window.innerWidth, 'x', window.innerHeight);
+                            console.log('  Canvas size:', canvas.width, 'x', canvas.height);
+                            console.log('  Container display:', container.style.display);
+
+                            // Ensure container display is set correctly BEFORE fullscreen
+                            container.style.display = 'flex';
+
+                            // Request fullscreen
+                            if (container.requestFullscreen) {
+                                await container.requestFullscreen();
+                            } else if (container.webkitRequestFullscreen) {
+                                await container.webkitRequestFullscreen();
+                            } else if (container.mozRequestFullScreen) {
+                                await container.mozRequestFullScreen();
+                            }
+
+                            // Wait for fullscreen transition
+                            await new Promise(resolve => setTimeout(resolve, 100));
+
+                            console.log('After entering fullscreen:');
+                            console.log('  Window size:', window.innerWidth, 'x', window.innerHeight);
+
+                            // Note: Canvas will be resized automatically by handleFullscreenChange
+                            // which is triggered by the fullscreen event
+                        } catch (err) {
+                            console.log('Fullscreen request failed:', err);
+                        }
+                    });
+
+                    // Listen for fullscreen changes to show/hide the button
+                    function handleFullscreenChange() {
+                        // Check if we're in fullscreen mode
+                        const isFullscreen = !!(document.fullscreenElement ||
+                                                document.webkitFullscreenElement ||
+                                                document.mozFullScreenElement);
+
+                        console.log('Fullscreen changed. isFullscreen:', isFullscreen);
+                        console.log('  Canvas size:', canvas.width, 'x', canvas.height);
+                        console.log('  Window size:', window.innerWidth, 'x', window.innerHeight);
+
+                        // Show button when NOT in fullscreen, hide when in fullscreen
+                        fullscreenButton.style.display = isFullscreen ? 'none' : 'block';
+
+                        // CRITICAL: Never resize canvas after PEBL has launched
+                        // PEBL's SDL surface cannot handle canvas size changes
+                        // The canvas size is set once before PEBL launch and never changed
+                        console.log('  Canvas resize blocked - PEBL cannot handle size changes');
+                    }
+
+                    // Add listeners for all browsers
+                    document.addEventListener('fullscreenchange', handleFullscreenChange);
+                    document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
+                    document.addEventListener('mozfullscreenchange', handleFullscreenChange);
+
+                    // Check initial state (button stays hidden if we're in fullscreen)
+                    handleFullscreenChange();
+                });
+
+            } catch (error) {
+                console.error('Launch error:', error);
+                setStatus('Error: ' + error.message, 'error');
+            }
+        }
+
+        // Start initialization when DOM is ready
+        window.addEventListener('DOMContentLoaded', initializePEBL);
+    </script>
+
+    <!-- Load the PEBL Emscripten build -->
+    <script src="pebl2.js"></script>
+</body>
+</html>

@@ -1,0 +1,271 @@
+define Start(p)
+{
+   gScriptName <- "PEBL Memory Scanning Task"
+
+   ## Initialize upload system (works for both online and native)
+   InitializeUpload()
+
+   ## Fallback parameters
+   parpairs <- [["length1",2],
+                ["length2",4],
+                ["length3",6],
+                ["trialsperblock",25],
+                ["isi",50],
+                ["stimset","BCDFGHJKLMNPQRSTVWZ"],
+                ["rounds",2],
+                ["samestim",1],
+                ["responsemode","auto"]]
+
+  gParams <- CreateParameters(parpairs, gParamFile)
+
+  ## Set semantic response labels
+  gParams.responsesemantics <- ["present","absent"]
+
+  stimulusSet <- SplitString(gParams.stimset, "")
+  lengths <- [gParams.length1, gParams.length2, gParams.length3]
+  trialBase <- gParams.trialsperblock
+
+  gSleepEasy <- 1
+  gWin <- MakeWindow("black")
+
+  if(gSubNum + "" == "0")
+  {
+    gSubNum <- GetSubNum(gWin)
+  }
+
+  GetStrings(gLanguage)
+
+  ## Create layout with response system
+  gLayout <- CreateLayout("sternberg", gWin, gParams)
+  gLayout.header.text <- gStrings.header
+  InitializeLSL(gWin)
+  Draw()
+
+  ## Open data file
+  gFileOut <- GetNewDataFile(gSubNum, gWin, "sternberg", "csv",
+                    "subNum,length,trial,set,stim,targetfoil,resp,corr,rt")
+
+  log <- FileOpenAppend("data/runlog.txt")
+  FilePrint(log, gSubNum + "," + TimeStamp() + ",Sternberg started")
+
+  ## LSL marker: experiment start
+  LSLMarker("STERNBERG_START")
+
+  ## Instructions
+  MessageKeyBox(gStrings.inst1)
+
+  ShowCursor(0)
+
+  datAcc <- []
+  datRT <- []
+  datCond <- []
+  datTF <- []
+
+  stimsets <- []
+  nonsets <- []
+
+  ## Precreate the stimuli
+  if(gParams.samestim)
+  {
+    loop(length, lengths)
+    {
+      letters <- Shuffle(stimulusSet)
+      stim <- SubList(letters, 1, length)
+      nonset <- SubList(letters, length + 1, Length(letters))
+      PushOnEnd(stimsets, stim)
+      PushOnEnd(nonsets, nonset)
+    }
+
+    stimsets <- RepeatList(stimsets, gParams.rounds)
+    nonsets <- RepeatList(nonsets, gParams.rounds)
+
+  } else {
+    loop(i, Sequence(1, gParams.rounds, 1))
+    {
+      loop(length, lengths)
+      {
+        letters <- Shuffle(stimulusSet)
+        stim <- SubList(letters, 1, length)
+        nonset <- SubList(letters, length + 1, Length(letters))
+        PushOnEnd(stimsets, stim)
+        PushOnEnd(nonsets, nonset)
+      }
+    }
+  }
+
+  rounds <- Sequence(1, Length(stimsets), 1)
+  totalBlocks <- Length(stimsets)
+  trial <- 1
+  blockNum <- 0
+
+  loop(i, rounds)
+  {
+      blockNum <- blockNum + 1
+      length <- Length(Nth(stimsets, i))
+
+      stim <- Nth(stimsets, i)
+      nonset <- Nth(nonsets, i)
+
+      ## Create target and foil sequences
+      targs <- SampleNWithReplacement(stim, trialBase)
+      foils <- SampleNWithReplacement(nonset, trialBase)
+
+      stimbase <- Merge(targs, foils)
+      tf <- Merge(Repeat("T", trialBase), Repeat("F", trialBase))
+      stimsequence <- Shuffle(Transpose([stimbase, tf]))
+
+      ## LSL marker: block start
+      LSLMarker("BLOCK_START_" + blockNum + "_LEN_" + length)
+
+      ## Show study set
+      setLabel <- EasyLabel(ListToString(stim), gLayout.centerX, gLayout.centerY - 40, gWin, 44)
+      headLabel <- EasyLabel(gStrings.head1, gLayout.centerX, gLayout.centerY + 40, gWin, 25)
+
+      gLayout.header.text <- gStrings.header + " - Block " + blockNum + " of " + totalBlocks
+
+      Draw()
+
+      ## LSL marker: study set onset
+      LSLMarker("STUDY_SET_ONSET_" + ListToString(stim))
+
+      WaitForAnyKeyPress()
+      Hide(setLabel)
+      Hide(headLabel)
+      Draw()
+
+      correct <- 0
+      trialInBlock <- 0
+
+      loop(st, stimsequence)
+      {
+        trialInBlock <- trialInBlock + 1
+        gLayout.header.text <- gStrings.header + " - Block " + blockNum + ", Trial " + trialInBlock + " of " + (trialBase * 2)
+
+        if(not correct)
+        {
+           Show(setLabel)
+           Draw()
+           Wait(1500)
+           Hide(setLabel)
+           Draw()
+        }
+
+        out <- Trial(stim, First(st), Second(st))
+        correct <- Second(out)
+        outlist <- [gSubNum, length, trial, ListToString(stim), st, out]
+        FilePrint(gFileOut, ConcatenateList(Flatten(outlist), ","))
+        trial <- trial + 1
+        ## Record data
+        PushOnEnd(datAcc, correct)
+        PushOnEnd(datRT, Third(out))
+        PushOnEnd(datCond, length)
+        PushOnEnd(datTF, Second(st))
+        Wait(gParams.isi)
+
+      }
+
+      RemoveObject(setLabel, gWin)
+      RemoveObject(headLabel, gWin)
+
+      ## LSL marker: block end
+      LSLMarker("BLOCK_END_" + blockNum)
+  }
+
+  ## LSL marker: experiment end
+  LSLMarker("STERNBERG_END")
+
+  ## Compute stats
+  levs <- Levels(datCond)
+
+  out <- TimeStamp() + CR(1) + "Participant: " + gSubNum + CR(2)
+  datall <- Transpose([datRT, datAcc, datTF])
+  loop(i, levs)
+  {
+    subset <- Transpose(Filter(datAll, Match(datCond, i)))
+    filterT <- Match(Third(subset), "T")
+    filterF <- Match(Third(subset), "F")
+
+    rtMeanT <- Mean(Filter(First(subset), filterT))
+    rtMeanF <- Mean(Filter(First(subset), filterF))
+
+    accMeanT <- Mean(Filter(Second(subset), filterT))
+    accMeanF <- Mean(Filter(Second(subset), filterF))
+
+    out <- out + i + " Present     " + Round(rtMeanT) + "    " + Round(accMeanT, 3) + CR(1)
+    out <- out + i + " Absent      " + Round(rtMeanF) + "    " + Round(accMeanF, 3) + CR(1)
+  }
+
+  reportFile <- FileOpenWrite("data/" + gSubNum + "/report.txt")
+  FilePrint(reportFile, out)
+
+  FilePrint(log, gSubNum + "," + TimeStamp() + ",Sternberg completed")
+
+  ## Close all files before upload
+  FileClose(gFileOut)
+  FileClose(reportFile)
+  FileClose(log)
+
+  ## Upload data files
+  UploadFile(gSubNum, gFileOut.filename)
+  UploadFile(gSubNum, reportFile.filename)
+  UploadFile(gSubNum, "data/runlog.txt")
+
+  FinalizeLSL()
+  MessageKeyBox(out + gStrings.debrief)
+}
+
+
+define Trial(learned, stim, type)
+{
+   stimlab <- EasyLabel(stim, gLayout.centerX, gLayout.centerY, gWin, 50)
+
+   Show(stimlab)
+   Draw()
+
+   ## LSL marker: probe onset
+   LSLMarker("PROBE_" + stim + "_" + type)
+
+   time1 <- GetTime()
+   resp <- WaitForLayoutResponse(gLayout)
+   time2 <- GetTime()
+
+   ## LSL marker: response
+   LSLMarker("RESPONSE_" + resp)
+
+   Hide(stimlab)
+   RemoveObject(stimlab, gWin)
+   Draw()
+   Wait(20)
+
+   ## Score for correctness using semantic responses
+   if(type == "T")
+   {
+     corr <- (resp == "present" or resp == "left")
+   } else {
+     corr <- (resp == "absent" or resp == "right")
+   }
+
+   return([resp, corr, (time2 - time1)])
+}
+
+
+define MessageKeyBox(message)
+{
+  tb <- AdaptiveTextBox(message,
+                        gLayout.stimulusRegion.x + 20,
+                        gLayout.stimulusRegion.y + 20,
+                        gWin, 56,
+                        gLayout.stimulusRegion.width - 40,
+                        gLayout.stimulusRegion.height - 40,
+                        "scalefont")
+  tb.formatted <- 1
+  Draw()
+  WaitForAnyKeyPress()
+  RemoveObject(tb, gWin)
+}
+
+
+define GetStrings(lang)
+{
+  gStrings <- GetTranslations("sternberg", lang)
+}

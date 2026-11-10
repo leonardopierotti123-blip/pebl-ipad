@@ -1,0 +1,7 @@
+{
+  "HEADER": "Exploración de Memoria",
+  "INST1": "En esta tarea, primero verá y memorizará una lista de letras. Por ejemplo, BN. Una vez que haya memorizado la lista, verá una secuencia de letras, y se le pedirá que juzgue si cada una de ellas era parte o no de la lista. Presione la tecla PRESENTE para las letras de la lista, y la tecla AUSENTE para las letras que no están en la lista. Presione cualquier tecla cuando esté listo/a para comenzar.",
+  "HEAD1": "Memorice esta secuencia. Presione cualquier tecla para comenzar.",
+  "HEAD2": "PRESENTE                             AUSENTE",
+  "DEBRIEF": "Presione cualquier tecla para continuar."
+}

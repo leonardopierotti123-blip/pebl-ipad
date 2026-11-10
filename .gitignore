@@ -1,0 +1,111 @@
+# Legacy Windows build directories (not used, removed from tracking)
+devcpp/
+vc/
+
+# Build artifacts
+*.o
+*.obj
+*.exe
+*.dll
+*.so
+*.dylib
+*.a
+*.lib
+*.AppImage
+*.tar.gz
+bin/pebl2
+bin/pebl2.exe
+bin/pebl-validator
+bin/*.data
+bin/*.js
+bin/*.js.metadata
+bin/*.wasm
+bin/*.wasm.map
+bin/test-bundles/
+ValidatorAppDir/
+
+# Editor backup files
+*~
+*.swp
+*.swo
+*.bak
+\#*\#
+
+# R workspace files
+.RData
+.Rhistory
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Test output and debug files
+test-output.txt
+test*.pbl
+scoring_debug.txt
+peblhttp_errors.txt
+build_output.txt
+build_final.txt
+
+# Build directories and artifacts
+obj-native/
+.flatpak-builder/
+AppDir/
+
+# Data directories (participant data, should not be tracked)
+data/
+
+# Battery and upload-battery data files
+# Track only .R files and example files in upload-battery
+battery/*/data/*
+!battery/*/data/*.R
+upload-battery/*/data/*
+!upload-battery/*/data/*.R
+!upload-battery/*/data/*example*
+
+# Untracked tasks (copyrighted materials, should never be in git)
+untracked-tasks/
+
+# Temporary documentation
+ADAPTIVE_TEXTBOX_README.md
+
+# Doxygen generated documentation
+doc/dox/
+build.log
+
+# LaTeX build artifacts
+doc/pman/*.aux
+doc/pman/*.log
+doc/pman/*.out
+doc/pman/*.toc
+doc/pman/*.synctex.gz
+doc/pman/pebl-reference.aux
+doc/pman/reference.log
+
+# Sphinx build output
+doc/sphinx-doc/build/
+
+# AppImage symlink (bin/pebl2, bin/pebl-launcher, bin/pebl-validator are native binaries)
+bin/pebl2-appimage
+
+# Python bytecode
+doc/sphinx-doc/source/_pygments/__pycache__/
+libs/labstreaminglayer
+
+# Production-specific files
+tier-sync-production.sql
+
+
+# Response mode configuration directory
+emscripten/media/settings/response-modes/
+battery/stroop/
+*.par.json
+.Rhistory
+/libs/
+
+# Claude Code session data
+.claude/
+
+# Build artifacts - test bundles
+bin/test-bundles/*.data
+bin/test-bundles/*.js.metadata

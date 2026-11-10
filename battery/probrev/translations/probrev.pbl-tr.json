@@ -1,0 +1,7 @@
+{
+"HEADER": "Olasılıksal Tersine Öğrenme",
+"INST1": "Bir kural öğrenmeyi içeren bir deneye katılmak üzeresiniz. Her denemede, farklı renklerde şekiller içeren iki soyut resim göreceksiniz. Her denemede, bir kurala göre uyaranlardan birini seçmiş olacağız. Göreviniz hangi uyaranın doğru olduğunu seçmektir. Seçiminizden sonra, doğru ya da yanlış olduğunuzu yeşil gülen yüz (doğru) veya kırmızı üzgün yüz (yanlış) göstererek bildireceğiz. Ancak aldığınız geri bildirim her zaman doğru olmayacaktır. Sol veya sağ uyaranı seçmek için aşağıda belirtilen yanıtları kullanın.\n\nBaşlamak için herhangi bir tuşa basın.",
+"BREAK": "Şimdi kısa bir ara verebilirsiniz. Bir sonraki bloğa devam etmek için herhangi bir tuşa basın.",
+"INST2": "Aşağıdaki iki şekil bir sonraki testte kullanılacaktır.\n\n\nYanıt vermek için aşağıda belirtilen yanıtları kullanın.\nBaşlamak için boşluk çubuğuna basın.",
+"DEBRIEF": "Deneye katıldığınız için teşekkür ederiz. Devam etmek için herhangi bir tuşa basın."
+}

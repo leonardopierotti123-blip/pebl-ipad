@@ -1,0 +1,45 @@
+{
+  "test": "evenodd",
+  "version": "1.0",
+  "description": "EVENODD Test",
+  "parameters": [
+    {
+      "name": "reps",
+      "type": "integer",
+      "default": 10,
+      "description": "Number of trials of each condition (odd and even). Total trials will be twice this."
+    },
+    {
+      "name": "isi",
+      "type": "integer",
+      "default": 500,
+      "description": "Inter-stimulus interval in ms."
+    },
+    {
+      "name": "minval",
+      "type": "integer",
+      "default": 100,
+      "description": "smallest possible number to test."
+    },
+    {
+      "name": "maxval",
+      "type": "integer",
+      "default": 999,
+      "description": "largest possible number to test."
+    },
+    {
+      "name": "responsemode",
+      "type": "string",
+      "default": "auto",
+      "options": ["auto", "keyboardShift", "keyboardSafe", "arrowLR", "mousetarget", "mousebutton", "userselect"],
+      "label": "Response Mode",
+      "description": "Response method: auto (platform-aware), keyboardShift (L/R shift), keyboardSafe (Z/slash for web), arrowLR (left/right arrows), mousetarget (click targets), mousebutton (L/R mouse buttons), userselect (custom key)"
+    },
+    {
+      "name": "responselabels",
+      "type": "list",
+      "default": ["ODD", "EVEN"],
+      "description": "Semantic labels for left and right responses"
+    }
+  ]
+}

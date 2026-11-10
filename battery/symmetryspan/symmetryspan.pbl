@@ -1,0 +1,1971 @@
+## The PEBL Symmetry Span Task
+## Original implemantation by David Hegarty
+##
+##  Modifications by Shane Mueller
+##
+##
+##
+#
+
+
+define Start(par)
+ {
+	## Initialize upload system (works for both online and native)
+	InitializeUpload()
+
+        GetStrings(gLanguage)
+
+	## Create window before InitDefaults (which needs gWin)
+	gWin <- MakeWindow("black")
+
+	## Initialize LSL outlet if --lsl flag was used
+	InitializeLSL(gWin)
+
+	InitDefaults()
+
+	parpairs <- [["feedbacktimeout",1500],
+                     ["distractfile","distraction.csv"],
+		     ["batterythreshold",0.85],
+		     ["batteryFeedback",1],
+		     ["distracttimeoutminimum",1000],
+                     ["distracttimeoutmultiplier",2.5],
+		     ["requirethresholdprebattery",1],
+		     ["allowsecondchance",1],
+		     ["responsemode","none"],
+		     ["testreps",3],
+		     ["testminsize",2],
+		     ["testmaxsize",5]]
+
+        gParams <- CreateParameters(parpairs,gParamFile)
+	gParams.responsesemantics <- "none"
+	CheckArgs()
+
+	## Create layout - no response labels since all responses are custom mouse grid
+	gLayout <- CreateLayout("symmetryspan", gWin, gParams)
+	Draw()
+
+	## Load distraction tasks
+	gDistractionTasks<-LoadDistractionTasks( gDistractionFile )
+	gDistractWorkingSet<-SampleN( gDistractionTasks, Length( gDistractionTasks ) )
+
+	gDrawDebug<-DrawDebug(gDrawDebug)
+
+	if ( gSubNum+"" == "0" )
+	{
+  	   gSubNum<-GetSubNum( gWin )
+	}
+
+	OpenSubOut()
+
+        gTrial <- 1
+
+	## Define task structure
+	DefineTaskStructure()
+
+	## Instructions
+	ShowInstruction("INSTRUCTIONS", -1)
+
+	## Practice Square Memory Only
+	ShowInstruction("SQUARES", -1)
+	ShowInstruction("SQUARES2", -1)
+	ExecuteTaskBlock(gPracticeMemory, "practice")
+
+	## Practice Symmetry Only
+	ShowInstruction("SYMMETRY", -1)
+	ShowInstruction("SYMMETRY2", -1)
+	ShowInstruction("SYMMETRY3", -1)
+	ShowInstruction("SYMMETRY4", -1)
+	ShowInstruction("SYMMETRY5", -1)
+	ShowInstruction("SYMMETRY6", -1)
+	mathPracticeStats <- ExecuteTaskBlock(gPracticeMath, "practice")
+
+	## Practice Both
+	ShowInstruction("PRACBATTERY1", -1)
+	ShowInstruction("PRACBATTERY2", -1)
+	ShowInstruction("PRACBATTERY3", -1)
+	bothPracticeStats <- ExecuteTaskBlock(gPracticeBoth, "practice")
+
+	## Check if subject meets math accuracy criteria before test
+	## Extract math accuracy from practice statistics
+	## bothPracticeStats format: [results, mathCorrect, mathTotal, mathAccuracy]
+	mathCorrect <- Nth(bothPracticeStats, 2)
+	mathTotal <- Nth(bothPracticeStats, 3)
+	mathAccuracy <- Nth(bothPracticeStats, 4)
+
+	Print("Math practice performance: " + mathCorrect + "/" + mathTotal + " = " + mathAccuracy)
+
+	## Check if criteria met
+	metCriteria <- 1
+	if(gRequireThresholdPreBattery == 1 and mathAccuracy < gBatteryThreshold)
+	{
+		metCriteria <- 0
+		Print("Did not meet math criteria threshold: " + gBatteryThreshold + " (got " + mathAccuracy + ")")
+
+		## Offer second chance if enabled
+		if(gAllowSecondChance == 1)
+		{
+			Print("Offering second chance practice...")
+			ShowInstruction("SECONDCHANCE", -1)
+
+			## Run practice both again
+			bothPracticeStats <- ExecuteTaskBlock(gPracticeBoth, "practice")
+
+			## Extract second attempt accuracy
+			mathCorrect <- Nth(bothPracticeStats, 2)
+			mathTotal <- Nth(bothPracticeStats, 3)
+			mathAccuracy <- Nth(bothPracticeStats, 4)
+
+			Print("Second chance performance: " + mathCorrect + "/" + mathTotal + " = " + mathAccuracy)
+
+			## Check if criteria met on second attempt
+			if(mathAccuracy >= gBatteryThreshold)
+			{
+				metCriteria <- 1
+			}
+		}
+	}
+
+	## Proceed to test battery regardless of practice performance
+	if(metCriteria == 0)
+	{
+		## Did not meet criteria, but proceed anyway with a warning message
+		ShowInstruction("PROCEED_DESPITE_THRESHOLD", -1)
+		Print("Did not meet symmetry criteria threshold after all attempts, but proceeding to test")
+	} else {
+		## Met criteria, show normal test instructions
+		ShowInstruction("TRIALS", -1)
+	}
+
+	## Main Test Battery - everyone does this
+	## Track when test battery starts and record start time
+	gTestStartTrial <- gTrial
+	testStartTime <- GetTime()
+	testStats <- ExecuteTaskBlock(gTestBattery, "test")
+	testDuration <- Round((GetTime() - testStartTime) / 1000.0, 1)  ## Convert ms to seconds
+
+	## Ending
+	ShowInstruction("END", 2000)
+
+	Print("Task completed")
+
+	## Finalize LSL
+	FinalizeLSL()
+
+	## Close files before upload (required for Windows file locking compatibility)
+	FileClose(gSubOut)
+	FileClose(gPositionLog)
+
+	## Generate HTML report
+	spanReport <- CalculateSpanReport(testStats, gTestStartTrial, testDuration)
+	htmlFile <- CreateHTMLReport(spanReport)
+
+	## Upload data files (works online, no-op on native)
+	## Note: .filename property persists after FileClose(), so this is safe
+	out <- UploadFile(gSubNum, gSubOut.filename)
+	Print(out)
+	out <- UploadFile(gSubNum, gPositionLog.filename)
+	Print(out)
+	out <- UploadFile(gSubNum, htmlFile.filename)
+	Print(out)
+}
+
+
+define FindFirstIndex( aList, aItem )
+{
+	rval<-0
+	found<-0
+
+	loop( item, aLIst )
+	{
+		if ( found ==0 )
+		{
+			rval<-rval+1 
+			if ( item == aItem )
+			{
+				found<-1
+			}
+		}
+	}
+	if ( found == 0 )
+	{
+		rval <- 0
+	}
+	return rval
+}
+
+## Wrapper to convert library WaitForDownClick() return value to 1/0 for internal use
+## Returns 1 if clicked, 0 if timeout
+define WaitForClick(timeout)
+{
+	## Call library function (returns mouse event or "<timeout>")
+	resp <- WaitForDownClick(timeout)
+
+	## Convert to 1/0 for backward compatibility
+	if(resp == "<timeout>")
+	{
+		rval <- 0
+	} else {
+		rval <- 1
+	}
+
+	return(rval)
+}
+
+# show a single distract task, returns a list, first element 0/1 for success failure second element is time taken
+define ShowDistract(a_WaitTO)
+{
+	ShowCursor(1)
+	# fill up our list of tasks again
+	if( Length( gDistractWorkingSet ) == 0 )
+	{
+		gDistractWorkingSet<-SampleN( gDistractionTasks, Length( gDistractionTasks ) )
+	}
+
+	currDistract<-Nth(gDistractWorkingSet, 1 )
+	gDistractWorkingSet<-RemoveSubset( gDistractWorkingSet, [1])
+
+	question<-Nth( currDistract, 1 )
+	answer<-Nth( currDistract, 2 )
+	truthVal<-Nth( currDistract, 3 )
+
+	## SYMSPAN-SPECIFIC: question is an image object, not text
+	## For symspan, question is already a loaded image
+	xPos<- gLayout.centerX
+	yPos<- gLayout.centerY
+	AddObject( question, gWin )
+	Move( question, xPos, yPos )
+
+	footer <- Makelabel(gContinueText,glgFont)
+	AddObject(footer,gWin)
+	Move(footer,gLayout.centerX,gVideoHeight-100)
+
+	Draw()
+
+	Print("DEBUG: ShowDistract called with timeout = " + a_WaitTO + " ms")
+
+	elapsed<-GetTime()
+	rval<-WaitForClick( a_WaitTO )
+
+	Print("DEBUG: Symmetry problem click took " + (GetTime() - elapsed) + " ms, result = " + rval + " (1=clicked, 0=timeout)")
+	RemoveObject( question, gWin )
+
+	if ( rval != 0 ) # not timeout
+	{
+		spc <- 8
+		keyHeight <- 1.9 * gLgFontSz
+		cellHeight <- keyHeight + spc
+
+		answerLabel<-MakeLabel( answer, gStimFont )
+		xPos<- gLayout.centerX
+		yPos<- gLayout.centerY - cellHeight
+		Move(answerLabel, xPos,yPos)
+		AddObject(answerLabel,gWin)
+		Draw()
+
+		yPos <- yPos + 2 * cellHeight
+
+		keyWidth<-3*keyHeight
+		kb <- MakeKB( gWin, ["True","False"], xPos-keyWidth/2, yPos, 2, keyWidth, keyHeight, spc, 0 )
+		SetMouseCursorPosition(Floor(gLayout.centerX),FLOOR(gLayout.centerY))
+		SetMouseCursorPosition(Floor(gLayout.centerX),FLOOR(gLayout.centerY))
+
+		rtStart <- GetTime()
+		resp<-GetKBInput( GetClickable( kb ), ["1", "0"]  )
+		rtTime <- GetTime() - rtStart
+		Print("DEBUG: TRUE/FALSE response took " + rtTime + " ms")
+
+		if ( ToNumber( resp ) == truthVal )
+		{
+			# return 1 to indicate correct response
+			rval <- 1
+			Print("DEBUG: Response was CORRECT")
+		} else {
+			# return 0 to indicate incorrect response
+			rval <- 0
+			Print("DEBUG: Response was INCORRECT")
+		}
+
+		DestroyKB( gWin, kb )
+
+		## Measure elapsed time AFTER the TRUE/FALSE response
+		elapsed<-GetTime() - elapsed
+		Print("DEBUG: Total elapsed time (problem + response) = " + elapsed + " ms")
+	} else {
+		# return -1 to indicate timeout in repsonse to question
+		rval <- -1
+		elapsed<-GetTime() - elapsed
+		Print("DEBUG: TIMEOUT occurred - problem not completed in " + a_WaitTO + " ms")
+	}
+
+	return [rval,elapsed]
+}
+
+define ShowTargetLetter( testVal, timeout )
+{
+	ShowCursor(0)
+	lText <- MakeLabel(testVal, gStimFont)
+	xPos<- gLayout.centerX
+	yPos<- gLayout.centerY
+	Move(lText, xPos,yPos)
+	AddObject(lText,gWin)
+	Draw()
+	Wait(timeout)
+	RemoveObject(lText,gWin)
+}
+
+## Symspan-specific: Show target by highlighting grid position
+define ShowSymTarget( testVal, timeout )
+{
+	testVal<-ToNumber(testVal)
+	fakeKeys<-[]
+	loop( n, Sequence( 1, gGridNumCol * gGridNumRow, 1 ) )
+	{
+		fakeKeys<-Append( fakeKeys, ""+n )
+	}
+
+	kbp<-GetKBPositioning()
+
+	spc <- Nth( kbp, 1 )
+	keyHeight <- Nth( kbp, 2 )
+	cellHeight <- Nth( kbp, 3 )
+	vShift<- Nth( kbp, 4 )
+	currY <- Nth( kbp, 5 )
+	currX <- Nth( kbp, 6 )
+	currX <- Nth( kbp, 7 )
+	currY <- Nth( kbp, 8 )
+
+	padKb <- MakeSqKB( gWin, fakeKeys, currX, currY, gGridNumCol, keyHeight, spc, 1 )
+
+	allLabels<-[]
+	allLabels<-Flatten([allLabels, GetLabels(padKb)])
+	## highlight target face
+	faces <- GetKeyFaces( padKb )
+	hiFace <- Nth( faces, testVal )
+	hiFace.color <- gSymShownTargetColor
+	Draw()
+
+	Wait(timeout)
+	DestroyKB( gWin, padKb )
+}
+
+## Symspan-specific: Get keyboard positioning parameters
+define GetKBPositioning()
+{
+	spc <- 8
+	keyHeight <- 1.9 * gLgFontSz
+	cellHeight <- keyHeight + spc
+
+	## the main keypad
+	## positioning of main keypad starts from centre of screen (moved up for bigger response numbers)
+	vShift<- 130
+	currY <- gLayout.centerY-vShift
+	currX <- gLayout.centerX
+	currX <- currX - ( gGridNumCol-1)/2 * cellHeight
+	currY <- currY - (gGridNumRow-1)/2 * cellHeight
+
+	## now return them...
+	rval<-[]
+	rval<-Append(rval, spc )
+	rval<-Append(rval, keyHeight )
+	rval<-Append(rval, cellHeight )
+	rval<-Append(rval, vShift )
+	rval<-Append(rval, currY )
+	rval<-Append(rval, currX )
+	rval<-Append(rval, currX )
+	rval<-Append(rval, currY )
+
+	return rval
+}
+
+define ShowTargetInputScreen(padKeys, testVals)
+{
+	## SYMSPAN-SPECIFIC: Use GetKBPositioning() for consistent positioning
+	kbp<-GetKBPositioning()
+
+	spc <- Nth( kbp, 1 )
+	keyHeight <- Nth( kbp, 2 )
+	cellHeight <- Nth( kbp, 3 )
+	vShift<- Nth( kbp, 4 )
+	currY <- Nth( kbp, 5 )
+	currX <- Nth( kbp, 6 )
+
+	allClickable<-[]
+	allVals<-[]
+	allLabels<-[]
+
+	## SYMSPAN-SPECIFIC: Create keyboard with hideText=0 to show numbers
+	padKb <- MakeSqKB( gWin, padKeys, currX, currY, gGridNumCol, keyHeight, spc, 0 )
+	allClickable<-Flatten([allClickable, GetClickable(padKb)])
+	allVals<-Flatten( [allVals, padKeys] )
+	allLabels<-Flatten([allLabels, GetLabels(padKb)])
+
+	# blank key
+	blankX<- currX + (Nth(padKb, 2) - currX)/2
+	blankY<-Nth(padKb, 3)+keyHeight+spc
+	blankKey <- [gBlankKeyText]
+	blankWidth <- ( Nth(padKb, 2) - currX ) + keyHeight # width==height
+	blankKb <- MakeKB( gWin, blankKey, blankX, blankY, 1, blankWidth, keyHeight, spc, 0  )
+
+	allClickable<-Flatten([allClickable, GetClickable(blankKb)])
+	allVals<-Flatten([allVals, blankKey])
+	allLabels<-Flatten([allLabels, GetLabels(blankKb)] )
+	
+	# destination for user output - use bigger font for response numbers
+	padUserInput<-25
+	selLabels<-[]
+	## Use bigger cell height for response numbers (50% bigger font)
+	responseCellHeight <- Round(gResponseFontSz * 1.5) + spc
+	selLabelX<-gLayout.centerX - ( Length( testVals ) -1 )/2* responseCellHeight
+	selLabelY<-blankY + cellHeight + padUserInput
+
+	loop ( val, testVals )
+	{
+		l<-MakeLabel( gNoSelectionChar, gResponseFont )
+		#l<-MakeLabel( val, gResponseFont )
+		AddObject(l, gWin )
+		Move(l, selLabelX, selLabelY )
+		selLabels<-Append(selLabels, l )
+		selLabelX <-selLabelX + responseCellHeight
+	}
+	Draw()
+
+	# the clear/del kb
+	cdKeyWidth<-2 * keyHeight
+	cdKeys <- [gClearKeyText,gDelKeyText,gDoneKeyText]
+	cdX<-gLayout.centerX
+	cdX<- cdX - ( cdKeyWidth + spc )
+	cdY<-selLabelY + responseCellHeight + padUserInput
+	cdKb <- MakeKB( gWin, cdKeys, cdX, cdY, Length(cdKeys), cdKeyWidth, keyHeight, spc, 0 )
+
+	allClickable<-Flatten([allClickable, GetClickable(cdKb)])
+	allVals<-Flatten([allVals, cdKeys])
+	allLabels<-Flatten([allLabels, GetLabels(cdKb)] )
+
+	## SYMSPAN-SPECIFIC: Extract padFaces for highlighting
+	padFaces <- GetKeyFaces( padKb )
+
+	# get the user's input
+	userInput<-GetMouseInput( allClickable, allVals, allLabels, selLabels, padFaces )
+	Print("UserInput:" + userInput)
+
+	# and clean up
+	DestroyKB( gWin, cdKb )
+	loop( l, selLabels)
+	{
+		RemoveObject( l, gWin)
+	}
+	DestroyKB( gWin, blankKb )
+	DestroyKB( gWin, padKb )
+	return userInput
+}
+
+## this presents a set of (instruction) lines using adaptive formatted textbox
+## Uses layout system: instructions in header+subheader zone, Next button in response labels zone
+
+define PresentStatic( timeout, centred, staticData, isLast )
+{
+	## staticData should be a string (possibly with <br> tags for line breaks)
+	text <- staticData
+
+	## Create font with 25% larger size
+	fontSize <- Round(gLgFontSz * 1.25)
+	baseFont <- MakeFont(gPEBLBaseFont, 0, fontSize, gFGColor, gBGColor, 0)
+
+	## Position: feedback (timeout>0) centered textbox, instructions (timeout<=0) textbox at top
+	if (timeout > 0) {
+		## Feedback mode - use formatted textbox centered
+		boxWidth <- Floor(gVideoWidth * 0.8)
+		textbox <- MakeTextBox(text, baseFont, boxWidth, 500)
+		SetProperty(textbox, "FORMATTED", 1)
+		SetProperty(textbox, "ISADAPTIVE", 1)
+		if(centred)
+		{
+			SetProperty(textbox,"JUSTIFY", "CENTER")
+		}
+		AddObject(textbox, gWin)
+		boxX <- gLayout.centerX - boxWidth/2
+		boxY <- gLayout.centerY - 50
+		Move(textbox, boxX, boxY)
+		Draw()
+		WaitForClick( timeout )
+		RemoveObject(textbox, gWin)
+	} else {
+		## Instruction mode - 80% width textbox at top of header+subheader zone
+		boxWidth <- Floor(gVideoWidth * 0.8)
+		textbox <- MakeTextBox(text, baseFont, boxWidth, 500)
+		SetProperty(textbox, "FORMATTED", 1)
+		SetProperty(textbox, "ISADAPTIVE", 1)
+		AddObject(textbox, gWin)
+		boxX <- gLayout.centerX - boxWidth/2
+		boxY <- 50
+		Move(textbox, boxX, boxY)
+		Draw()
+
+		if ( isLast )
+		{
+			# wait forever (1/2 an hour). Magic combo of Ctrl-Alt-Shift-\ ends pebl
+			Wait( 1800000 )
+		} else {
+			## Show Next button in response labels zone using layout positioning
+			spc<- 50
+			keyHeight <- 1.9 * gLgFontSz
+			keyWidth<-3*keyHeight
+			## Position button in footer/response zone (centered horizontally)
+			btnX <- gLayout.centerX
+			btnY <- gLayout.zones.footer.y + 50
+			kb <- MakeKB( gWin, [gStrings.button_next], btnX, btnY, 1, keyWidth, keyHeight, spc, 0 )
+			resp<-GetKBInput( GetClickable( kb ), ["whatevs"]  )
+			DestroyKB( gWin, kb )
+		}
+		RemoveObject(textbox, gWin)
+	}
+}
+
+define MungeString( arr )
+{
+	rval<-""
+	first <- 1
+	loop( c, arr )
+	{
+		if(first == 0)
+		{
+			rval <- rval + "|"
+		}
+		rval <- rval + c
+		first <- 0
+	}
+	return rval
+}
+
+define PresentRun(  distractMS, targetMS, numTarget, stages, feedback )
+{
+  ## SYMSPAN-SPECIFIC: Use numbered keys 1-16 instead of letters
+  padKeys<-[]
+  loop( n, Sequence( 1, gGridNumCol * gGridNumRow, 1 ) )
+  {
+    padKeys<-Append( padKeys, ""+n )
+  }
+	if ( numTarget > 0 )
+	{
+		testVals<-SampleN(padKeys, numTarget)
+	} else {
+		testVals<-[]
+	}
+
+	rval<-[]
+
+	iShownTarget<-0
+
+
+	##First, show a ready signal
+	ready <- MakeLabel(gReadyText,gStimFont)
+	AddObject(ready,gWin)
+	Move(ready,gLayout.centerX,gLayout.centerY)
+	Draw()
+	Wait(500)
+	Hide(ready)
+	Draw()
+	Wait(1000)
+
+
+	loop( stage, stages )
+	{
+		stage <- Uppercase( stage )
+		if ( stage == "D" )
+		{
+			LSLMarker("distract_onset")
+			dRes<-ShowDistract( distractMS )
+			LSLMarker("distract_response")
+			rval<-Append( rval, Merge( [stage], dRes ) );
+		} else {  ##Stage==T
+			iShownTarget<-iShownTarget+1
+			LSLMarker("target_onset")
+			## SYMSPAN-SPECIFIC: Call ShowSymTarget instead of ShowTargetLetter
+			ShowSymTarget( Nth( testVals, iShownTarget ), targetMS )
+		}
+	}
+
+	if ( numTarget > 0 )
+	{
+		# show grid
+		LSLMarker("recall_grid_onset")
+		userInput<-ShowTargetInputScreen(padKeys, testVals)
+		LSLMarker("recall_complete")
+		rval<-Append( rval, [ "T", MungeString( testVals ), MungeString( userInput ) ] )
+	}
+
+	if ( feedback == 1 )
+	{
+		distractCorrect<- 0
+		distractTotal<- 0
+		targetCorrect<- 0
+		targetTotal<- numTarget
+
+		loop( task, rval )
+		{
+			if ( Nth( task, 1 ) == "D" )
+			{
+				if ( Nth( task, 2 ) == 1 )
+				{
+				    distractCorrect <- distractCorrect + 1
+				}
+				distractTotal<- distractTotal + 1
+			} else {
+				#targetCorrect <- targetCorrect + 1
+				i<- 1
+				while ( i <= Length( testVals ) )
+				{
+					if ( Nth( testVals, i ) == Nth( userInput, i ) )
+					{
+						targetCorrect <- targetCorrect + 1
+					}
+
+					i<- i + 1
+				}
+			}
+		}
+
+		text<-""
+
+		if ( distractTotal > 0 )
+		{
+			if ( targetTotal > 0 )
+			{
+				text<-gFeedbackDT
+			} else
+			{
+				text<-gFeedbackDOnly
+			}
+		} elseif( targetTotal > 0 )
+		{
+			text<-gFeedbackTOnly
+		}
+		if ( text != "" )
+		{
+			text <- SubstituteStrings(text, [["%CORRECT_T%", targetCorrect], ["%CORRECT_D%", distractCorrect], ["%NUM_T%", targetTotal], ["%NUM_D%", distractTotal]])
+			PresentStatic( gFeedbackTimeout, 1, text, 0 )
+		}
+	}
+	return rval
+}
+
+## SYMSPAN-SPECIFIC: Added padFaces parameter for highlighting
+define GetMouseInput( clickable, values, keyLabels, selLabels, padFaces )
+{
+	ShowCursor(1)
+	SetMouseCursorPosition(Round(gLayout.centerX), Round(gLayout.centerY))
+
+	## Create index list for WaitForClickOnTarget to return indices instead of values
+	indices <- Sequence(1, Length(clickable), 1)
+
+	## Find indices of control buttons
+	idxDone <- FindFirstIndex( values, gDoneKeyText )
+	idxClear <- FindFirstIndex( values, gClearKeyText )
+	idxDel <- FindFirstIndex( values, gDelKeyText )
+
+	SetFont( Nth(keyLabels, idxDone),	gLgFont_Disabled )
+	SetFont( Nth(keyLabels, idxClear),	gLgFont_Disabled )
+	SetFont( Nth(keyLabels, idxDel),	gLgFont_Disabled )
+	Draw()
+
+	if ( idxDone < 1 or idxClear < 1 or idxDel < 1 )
+	{
+		SignalFatalError( "Couldn't find control keys!" )
+	}
+
+	rval<-[]
+	done<-0
+	while ( done == 0 )
+	{
+		## Get clicked index directly from WaitForClickOnTarget
+		respIdx<-GetKBInput( clickable, indices )
+		respValue <- Nth( values, respIdx )
+
+		if ( respValue == gDoneKeyText )
+		{
+			# only valid if all values have been filled in
+			if ( Length( rval) == Length(selLabels))
+			{
+				done <- 1
+			}
+		} elseif( respValue == gClearKeyText )
+		{
+			if ( Length( rval ) > 0 )
+			{
+				# only valid if we have some values
+				# - clear them all
+				# first re-enable any that've been disabeld
+				loop( sel, rval )
+				{
+					idx<-FindFirstIndex( values, sel )
+					if ( idx > 0 )
+					{
+						SetFont( Nth( keyLabels, idx ), gLgFont )
+					}
+				}
+				rval<-[]
+
+				# disable all control buttons
+				SetFont( Nth(keyLabels, idxDone),	gLgFont_Disabled )
+				SetFont( Nth(keyLabels, idxClear),	gLgFont_Disabled )
+				SetFont( Nth(keyLabels, idxDel),	gLgFont_Disabled )
+
+				# remove all selLabel text
+				loop( sl, selLabels )
+				{
+					SetText( sl, gNoSelectionChar )
+				}
+				# finally re-draw
+				Draw()
+			}
+		} elseif( respValue == gDelKeyText )
+		{
+			if ( Length( rval ) > 0 )
+			{
+				# only valid if we have some values
+				# - delete the last character selected
+
+				# re-enable it's selection in keypad
+				deleted<-Last( rval )
+				idx<-FindFirstIndex( values, deleted )
+				if ( idx > 0 )
+				{
+					SetFont( Nth( keyLabels, idx), gLgFont )
+				}
+
+				# remove from selection & rval
+				SetText( Nth(selLabels, Length(rval)), gNoSelectionChar )
+				rval<-RemoveSubset(rval, List(Length(rval)))
+
+				# definitely can't be done
+				SetFont( Nth(keyLabels, idxDone),	gLgFont_Disabled )
+				# may still be able to clear or delete
+				if ( Length( rval ) == 0 )
+				{
+					SetFont( Nth(keyLabels, idxClear),	gLgFont_Disabled )
+					SetFont( Nth(keyLabels, idxDel),	gLgFont_Disabled )
+				}
+
+				#finally draw
+				Draw()
+			}
+		} elseif ( Length( rval ) < Length( selLabels ) )
+		{
+			if ( respValue == gBlankKeyText )
+			{
+				# is blank key
+				rval<-Append(rval, gUnknownValue )
+				SetText( Nth(selLabels, Length(rval)), gUnknownValue )
+			} elseif ( FindFirstIndex( rval, respValue ) == 0 )
+			{
+				# Not already selected
+				rval<-Append(rval, respValue )
+				SetText( Nth(selLabels, Length(rval)), respValue )
+				if ( gDisableGridSelections <> 0 )
+				{
+					SetFont( Nth( keyLabels, respIdx), gLgFont_Disabled )
+				}
+				## SYMSPAN-SPECIFIC: Highlight selected face if enabled
+				if ( gSymSpanHighlightPickedFaces <> 0 and Length(padFaces) > 0 )
+				{
+					if ( respIdx > 0 and respIdx <= Length(padFaces) )
+					{
+						face <- Nth( padFaces, respIdx )
+						face.color <- gSymShownTargetColor
+					}
+				}
+			}
+			# enable done if appropriate
+			if ( Length( rval ) == Length( selLabels ) )
+			{
+				SetFont( Nth( keyLabels, idxDone ), gLgFont )
+			}
+			# always try to enable these even though it may be a no-op
+			SetFont( Nth( keyLabels, idxClear ), gLgFont )
+			SetFont( Nth( keyLabels, idxDel ), gLgFont )
+			Draw()
+		}
+	} 
+
+	return rval
+}
+
+define DrawDebug(val)
+{
+	if ( val == 1 )
+	{
+		gDebugLab1<-MakeLabel("gVideoWidth="+gVideoWidth, gDbgFont)
+		AddObject( gDebugLab1, gWin )
+		Move( gDebugLab1, 100, 10 )
+
+		gDebugLab2<-MakeLabel("gVideoHeight="+gVideoHeight, gDbgFont)
+		Move( gDebugLab2, 110, 30 )
+		AddObject( gDebugLab2, gWin )
+
+		gYAxis<-ThickLine(gVideoWidth/2, 0, gVideoWidth/2, gVideoHeight, 2, gDbgColor )
+		AddObject( gYAxis, gWin )
+
+		gXAxis<-ThickLine(0, gVideoHeight/2, gVideoWidth, gVideoHeight/2, 2, gDbgColor )
+		AddObject( gXAxis, gWin )
+	}
+	return val
+}
+
+define CheckArgs()
+{
+
+	gFeedbackTimeout <- gParams.feedbacktimeout
+	gDistractionFile <- gParams.distractfile
+        gBatteryThreshold <- gParams.batterythreshold
+	gBatteryFeedback <- gParams.batteryfeedback
+        gDistractTimeoutMinimum <- gParams.distracttimeoutminimum
+  	gDistractTimeoutMultiplier<-  gParams.distracttimeoutmultiplier
+
+        gRequireThresholdPreBattery <- gParams.requirethresholdprebattery
+	gAllowSecondChance <- gParams.allowsecondchance
+
+	gTestReps <- gParams.testreps
+	gTestMinSize <- gParams.testminsize
+	gTestMaxSize <- gParams.testmaxsize
+
+	if ( gBatteryThreshold >= 1 )
+	{
+           SignalFatalError( "BatteryThreshold must be less than 1"+gBatteryThreshold )
+	}
+
+	if ( gDistractTimeoutMinimum < 100 )
+	{
+          SignalFatalError( "Invalid gDistractTimeoutMinium: " +gDistractTimeoutMinimum)
+	}
+	if(gDistractTimeoutMultiplier < 1)
+	{
+   	   SignalFatalError( "Invalid gDistractMultiplier: " +gDistractTimoutMultiplier )
+	}
+
+	## Validate test battery parameters
+	maxMemorySize <- gGridNumCol * gGridNumRow
+	if(gTestMinSize < 2)
+	{
+		SignalFatalError("testminsize must be at least 2 (got " + gTestMinSize + ")")
+	}
+	if(gTestMaxSize > maxMemorySize)
+	{
+		SignalFatalError("testmaxsize cannot exceed memory pool size of " + maxMemorySize + " (got " + gTestMaxSize + ")")
+	}
+	if(gTestMinSize > gTestMaxSize)
+	{
+		SignalFatalError("testminsize (" + gTestMinSize + ") cannot be greater than testmaxsize (" + gTestMaxSize + ")")
+	}
+	if(gTestReps < 1)
+	{
+		SignalFatalError("testreps must be at least 1 (got " + gTestReps + ")")
+	}
+
+}
+
+define InitDefaults()
+{
+	Print( "InitDefaults" )
+
+	gGridNumCol<- 4
+	gGridNumRow<- 4
+
+	## Symspan-specific settings
+	gSymShownTargetColor <- MakeColor("red")
+	gSymSpanHighlightPickedFaces <- 1
+	gUnknownValue <- "?"
+
+	## Feedback strings are loaded from translation files
+	gFeedbackTOnly <- gStrings.feedback_t_only
+	gFeedbackDOnly <- gStrings.feedback_d_only
+	gFeedbackDT <- gStrings.feedback_dt
+
+	## These will be set from gStrings after GetStrings() is called
+	gDoneKeyText <- "Done"
+	gClearKeyText <- "Clear"
+	gDelKeyText <- "Del"
+	gBlankKeyText <- "Blank"
+
+	gFGColor <- MakeColor("white")
+	gFGDisabledColor <- MakeColor("grey55")
+	gBGColor <- MakeColor("black")
+	gKeyBorder<-MakeColor( "grey20" )
+	gKeyFace<-MakeColor( "grey25" )
+	gDbgColor <-MakeColor("grey25")
+
+	# when a user selects a grid item, draw it as disabled to
+	# suggest they can't select again
+	gDisableGridSelections<-1
+	gNoSelectionChar<-"*"
+	gUnknownValue<-"_"
+
+        ##This is the font to use for static instruction screens:
+	gLgFontSz<-22
+	gKeyHeight<-2.1*gLgFontSz
+        gLgFont <- MakeFont(gPEBLBaseFont,0,gLgFontSz,gFGColor,gBGColor,0)
+
+        gStimFontsz <- 80
+	gStimFont <- MakeFont(gPEBLBaseFont,0,gStimFontSz,gFGColor,gBGColor,0)
+
+        gLgFont_Disabled <- MakeFont(gPEBLBaseFont,0,gLgFontSz,gFGDisabledColor,gBGColor,0)
+	gSmlFont<- MakeFont( gPEBLBaseFont,0,20,gFGColor,gBGColor,0)
+	gDbgFont<-MakeFont(  gPEBLBaseFont,0,20,gDbgColor,gBGColor,0)
+
+	## Response font - 50% bigger for selected numbers
+	gResponseFontSz <- Round(gLgFontSz * 1.5)
+	gResponseFont <- MakeFont(gPEBLBaseFont,0,gResponseFontSz,gFGColor,gBGColor,0)
+
+	gTotNumDistract<-0
+	gNumCorrectDistract<-0
+	gTimesDistract<-[]
+
+	## Status labels for test phase (shown in subheader zone)
+	gAccuracyLabel <- 0
+	gTrialCounterLabel <- 0
+
+	##this adds drawing debug messages.
+	gDrawDebug<-0
+}
+
+# return [avgTimeDistract,pctCorrectDistract]
+define ProcessRunResult( stages, runResult, write ,conds)
+{
+
+  distract_timeout <- First(conds)
+  target_timeout <- Nth(conds,2)
+  runLen <- Nth(conds,3)
+
+
+    Print("Processunresult")
+	pctCorrectDistract<- -1
+	avgTimeDistract<- -1
+	totTimeDistract<-0
+	numCorrectDistract<-0
+	totNumDistract<-0
+
+      Print(stages)
+
+      target<- ""
+      resp <- ""
+      correct <- "NA"
+
+	loop( result, runResult )
+	{
+                ##Distractor problems:
+		if ( Nth( result, 1 ) == "D" )
+		{
+			success<-Nth(result,2)
+			ms<-Nth(result, 3)
+			totTimeDistract<- totTimeDistract+ms
+			gTimesDistract <- Append( gTimesDistract,  ms )
+			if ( success == 1 )
+			{
+		   	  numCorrectDistract<-numCorrectDistract+1
+			}
+			totNumDistract<- totNumDistract + 1
+	
+                 }elseif(First(result)=="T"){
+		  target <- Second(result)
+		  resp <- Third(result)
+		  correct <- target==resp
+		  partial <- PartialCorrect(target,resp,"|")
+		  
+
+                }
+		if ( write != 0  and First(result)=="D")
+		{
+		  FilePrint( gPositionLog, gSubNum+","+ gTrial+","+
+		    	     distract_timeout +","+ target_timeout +","+ runLen +","+
+			     numCorrectDistract+","+totNumDistract+","+
+			     Nth( result, 1 ) + "," + Nth( result, 2 ) + ","+Nth(result,3 ) +",")
+	       }
+	}
+
+	if ( totNumDistract > 0 ) {
+		pctCorrectDistract<- numCorrectDistract / totNumDistract
+		avgTimeDistract<- totTimeDistract / totNumDistract
+
+		gTotNumDistract <- gTotNumDistract + totNumDistract
+		gNumCorrectDistract <- gNumCorrectDistract + numCorrectDistract
+
+	}
+	if(write)
+        {
+        #   PRint out one line per trial:
+           FilePrint(gSubOut,gSubNum+","+ gTrial+","+distract_timeout +","+ target_timeout +","+ runLen +
+	    		   "," + Length(SplitString(target,"")) +
+                            ","+target+","+resp+","+correct+","+avgTimeDistract+","+
+                            pctCorrectDistract+","+
+                            numcorrectdistract+","+totNumDistract + "," +
+                            gNumCorrectdistract+ "," +gTotNumDistract)
+
+        }
+
+	return [avgTimeDistract,pctCorrectDistract]
+}
+
+								#######Make Data files
+## SYMSPAN-SPECIFIC: Use symspan filename prefix
+define OpenSubOut()
+{
+	subNoSpc<-ReplaceChar( gSubNum, [" ","/","\",",",":"], "_" )
+        header <- "subnum,trial,probtime,memtime,length,numstim,stim,resp,memcorr,time,distcorr,numcorrdist,totnumdist,runningcorrect,runningtotal"
+	gSubOut <- GetNewDataFile(subNoSpc,gWin,"symspan","csv",header)
+
+	header <- "subnum,trial,mathprestime,memtime,length,numcorrdist,totnumdist,type,corr,rt"
+
+	gPositionLog <- GetNewDataFile(subNoSpc,gWin,"symspan-sym","csv",header)
+	#FilePrint( gSubOut, "NEWSESSION:" +TimeStamp() )
+}
+
+
+
+
+## Execute the task using list-based system
+
+## SYMSPAN-SPECIFIC: LoadDistractionTasks loads images instead of text
+define LoadDistractionTasks( a_File )
+{
+	Print( "Loading distraction tasks from " + a_File +"...")
+
+	## Use ReadCSV() for proper CSV parsing with quote handling
+	table <- ReadCSV( a_File )
+
+	if ( Length( table ) == 0 )
+	{
+		SignalFatalError( "No distraction tasks loaded from " + a_File )
+	}
+
+	rval <- []
+	loop( row, table )
+	{
+		if(Length(row) < 3)
+		{
+			SignalFatalError( "Invalid Distraction Spec (need 3 columns): " + row )
+		}
+
+		imageFile <- StripSpace(Nth(row, 1))
+		answer <- StripSpace(Nth(row, 2))
+		isTF <- Lowercase(StripSpace(Nth(row, 3)))
+
+		## Validate fields
+		if(StringLength(imageFile) < 1)
+		{
+			SignalFatalError( "Invalid Distraction Spec (empty image file)" )
+		}
+		if(StringLength(answer) < 1)
+		{
+			SignalFatalError( "Invalid Distraction Spec (empty answer)" )
+		}
+
+		## Parse true/false value
+		tfValue <- Nth( SplitString( isTF, "" ), 1 )
+		if ( tfValue == "t" )
+		{
+			tfValue <- 1
+		} elseif ( tfValue == "f" )
+		{
+			tfValue <- 0
+		} else {
+			SignalFatalError( "Invalid Distraction Spec (expected t or f): " + isTF )
+		}
+
+		## SYMSPAN-SPECIFIC: Load image instead of storing text
+		im <- MakeImage( imageFile )
+		rval <- Append( rval, [im, answer, tfValue] )
+	}
+
+	Print( "Loaded " + Length(rval) + " distraction tasks" )
+	return rval
+}
+
+define GetKBInput( kb, value_map )
+{
+	rval<- WaitForClickOnTarget(  kb, value_map )
+
+	return rval
+}
+
+## SYMSPAN-SPECIFIC: Added hideText parameter and keyFaces return
+define MakeSqKB(win, keys,  kbLeft, kbTop, nCol, keySz, spc, hideText  )
+{
+	return MakeKB( win, keys,  kbLeft, kbTop, nCol, keySz, keySz, spc, hideText  )
+}
+
+## SYMSPAN-SPECIFIC: Added hideText parameter and keyFaces return
+define MakeKB(win, keys,  kbLeft,kbTop, nCol, keyWidth, keyHeight, spc, hideText  )
+{
+	border<-4
+
+	cellWidth<-keyWidth+spc
+	cellHeight<-keyHeight+spc
+
+	xExtent<-kbLeft
+	yExtent<-kbTop
+	clickable <- []
+	labels<-[]
+	stuff <- []
+	keyFaces <- []  ## SYMSPAN-SPECIFIC: Track colored rectangles
+	i<-1
+	loop(aKey,keys)
+	{
+		colnum <- Mod( i-1, nCol )
+		rownum <- Floor( (i-1)/nCol )
+		i<-i+1
+
+		back1 <- Rectangle(kbLeft+colnum*cellWidth,kbTop+rownum*cellHeight,keyWidth, keyHeight,gKeyBorder,1)
+		keyFace <- Rectangle(kbLeft+colnum*cellWidth,kbTop+rownum*cellHeight,keyWidth-4,keyHeight-4, gKeyFace,1)
+
+		## SYMSPAN-SPECIFIC: Hide text labels for grid display
+		if ( hideText==1 ) {
+			lab <- MakeLabel("",gLgFont)
+		} else {
+			lab <- MakeLabel(aKey,gLgFont)
+		}
+
+		AddObject(back1,win)
+		AddObject(keyFace,win)
+		AddObject(lab,win)
+		x<-kbLeft+colnum*cellWidth
+		y<-kbTop+rownum*cellHeight
+		Move(lab,x,y)
+		if ( x > xExtent ) { xExtent <- x }
+		if ( y > yExtent ) { yExtent <- y }
+		clickable <- Append(clickable,back1)
+		stuff <- Append(stuff,[lab,back1,keyFace])
+		labels <- Append(labels, lab)
+		keyFaces <- Append( keyFaces, keyFace )  ## SYMSPAN-SPECIFIC
+	}
+	Draw()
+
+	## SYMSPAN-SPECIFIC: Return keyFaces as 7th element
+	return [clickable,xExtent,yExtent, cellWidth, Flatten(stuff), labels, keyFaces]
+}
+
+define GetClickable( kb )
+{
+	return Nth(kb, 1)
+}
+
+define GetLabels( kb )
+{
+	return Nth(kb, 6)
+}
+
+## SYMSPAN-SPECIFIC: Extract keyFaces from keyboard
+define GetKeyFaces( kb )
+{
+	return Nth(kb, 7)
+}
+
+define DestroyKB(win,kb)
+{
+	loop( obj, Flatten( Nth(kb, 5 ) ) )
+	{
+		RemoveObject( obj, win)
+	}
+
+}
+
+
+## SYMSPAN-SPECIFIC: Load symmetryspan translations
+define GetStrings(lang)
+{
+  lang <- Uppercase(lang)
+  fname <- "translations/symmetryspan.pbl-" + Lowercase(lang) + ".json"
+
+  if(FileExists(fname))
+  {
+    gStrings <- ReadTranslationJSON(fname, lang)
+  } else {
+    gStrings <- ReadTranslationJSON("translations/symmetryspan.pbl-en.json", lang)
+  }
+
+  ## Set UI strings from translations
+  gReadyText <- gStrings.ready_prompt
+  gContinueText <- gStrings.click_prompt
+  gDoneKeyText <- gStrings.button_done
+  gClearKeyText <- gStrings.button_clear
+  gDelKeyText <- gStrings.button_del
+  gBlankKeyText <- gStrings.button_blank
+}
+
+
+##############################################################################
+## NEW LIST-BASED TASK DEFINITION SYSTEM
+##############################################################################
+
+## Define the task structure using PEBL native lists
+define DefineTaskStructure()
+{
+  Print("Defining task structure...")
+
+  ## Practice Letter Memory Only (no math)
+  gPracticeMemory <- [
+    ["memory_only", 2, 1000, 1],  ## numLetters, letterDuration, showFeedback
+    ["memory_only", 2, 1000, 1],
+    ["memory_only", 3, 1000, 1],
+    ["memory_only", 3, 1000, 1]
+  ]
+
+  ## Practice Math Only (no letters) - 15 trials alternating 1-2 problems
+  gPracticeMath <- [
+    ["math_only", 1, 1],  ## numProblems, showFeedback
+    ["math_only", 2, 1],
+    ["math_only", 1, 1],
+    ["math_only", 2, 1],
+    ["math_only", 1, 1],
+    ["math_only", 2, 1],
+    ["math_only", 1, 1],
+    ["math_only", 2, 1],
+    ["math_only", 1, 1],
+    ["math_only", 2, 1],
+    ["math_only", 1, 1],
+    ["math_only", 2, 1],
+    ["math_only", 1, 1],
+    ["math_only", 2, 1],
+    ["math_only", 1, 1]
+  ]
+
+  ## Practice Both (with criteria checking)
+  ## Format: ["battery", reps, setSizes, letterDuration, showFeedback, mathThreshold]
+  ## Following Unsworth et al. (2005) pattern: 3 practice trials of set size 2
+  gPracticeBoth <- [
+    ["battery", 3, [2], 650, 1, gBatteryThreshold]
+  ]
+
+  ## Main Test Battery
+  ## Generate set sizes from parameters
+  testSizes <- Sequence(gTestMinSize, gTestMaxSize, 1)
+  gTestBattery <- [
+    ["battery", gTestReps, testSizes, 650, 0, gBatteryThreshold]
+  ]
+
+  Print("Task structure defined")
+  Print("Test battery: " + gTestReps + " reps of sizes " + testSizes)
+}
+
+
+## Extract images from text with <img>path</img> tags
+## Returns [cleanedText, imagePath]
+## If no image found, returns [originalText, ""]
+define ExtractImages(text)
+{
+  cleanedText <- text
+  imagePath <- ""
+
+  ## Find <img> tag
+  imgStart <- FindInString(text, "<img>", 1)
+
+  if(imgStart > 0)
+  {
+    ## Find </img> tag
+    imgEnd <- FindInString(text, "</img>", imgStart)
+
+    if(imgEnd > 0)
+    {
+      ## Extract image path (between <img> and </img>)
+      ## SubString uses (start, length) not (start, end)
+      pathStart <- imgStart + 5
+      pathLength <- imgEnd - pathStart
+      imagePath <- SubString(text, pathStart, pathLength)
+
+      ## Concatenate text before and after the image tag
+      beforeLength <- imgStart - 1
+      if(beforeLength > 0)
+      {
+        beforeImg <- SubString(text, 1, beforeLength)
+      } else {
+        beforeImg <- ""
+      }
+
+      afterStart <- imgEnd + 6
+      afterLength <- StringLength(text) - afterStart + 1
+      if(afterLength > 0)
+      {
+        afterImg <- SubString(text, afterStart, afterLength)
+      } else {
+        afterImg <- ""
+      }
+
+      cleanedText <- beforeImg + afterImg
+    }
+  }
+
+  return([cleanedText, imagePath])
+}
+
+
+## Show instruction from gStrings
+## Handles special case: if text contains <img>path</img> tags, displays the image
+define ShowInstruction(key, timeout)
+{
+  ## Look up instruction text from gStrings
+  key <- Lowercase(key)
+  text <- GetProperty(gStrings, key)
+
+  if(text == "")
+  {
+    SignalFatalError("Unknown instruction key: " + key)
+  }
+
+  ## Extract any embedded images
+  extracted <- ExtractImages(text)
+  cleanedText <- First(extracted)
+  imagePath <- Second(extracted)
+
+  ## Check if we found an image
+  if(imagePath != "")
+  {
+    ## Load and display the image
+    practiceImage <- MakeImage(imagePath)
+    AddObject(practiceImage, gWin)
+    Move(practiceImage, gLayout.centerX, gLayout.centerY - 100)
+
+    ## Create textbox for the instruction text below image
+    fontSize <- Round(gLgFontSz * 1.25)
+    baseFont <- MakeFont(gPEBLBaseFont, 0, fontSize, gFGColor, gBGColor, 0)
+    boxWidth <- Floor(gVideoWidth * 0.8)
+    textbox <- MakeTextBox(cleanedText, baseFont, boxWidth, 300)
+    SetProperty(textbox, "FORMATTED", 1)
+    SetProperty(textbox, "ISADAPTIVE", 1)
+    AddObject(textbox, gWin)
+    boxX <- gLayout.centerX - boxWidth/2
+    boxY <- gLayout.centerY + 100
+    Move(textbox, boxX, boxY)
+    Draw()
+
+    ## Show Next button
+    spc <- 50
+    keyHeight <- 1.9 * gLgFontSz
+    keyWidth <- 3 * keyHeight
+    btnX <- gLayout.centerX
+    btnY <- gLayout.zones.footer.y + 50
+    kb <- MakeKB(gWin, [gStrings.button_next], btnX, btnY, 1, keyWidth, keyHeight, spc, 0)
+    resp <- GetKBInput(GetClickable(kb), ["whatevs"])
+    DestroyKB(gWin, kb)
+
+    ## Clean up
+    RemoveObject(textbox, gWin)
+    RemoveObject(practiceImage, gWin)
+
+  } else {
+    ## Normal instruction - show using PresentStatic
+    PresentStatic(timeout, 0, text, 0)
+  }
+}
+
+
+## Run a memory-only trial (letters, no math)
+define RunMemoryTrial(numLetters, duration, feedback)
+{
+  ## Build stages list - just letters
+  stages <- Repeat("T", numLetters)
+
+  ## Use existing PresentRun but with no math
+  result <- PresentRun(-1, duration, numLetters, stages, feedback)
+
+  ## Log practice trial
+  ProcessRunResult(stages, result, 1, [-1, duration, numLetters])
+
+  return result
+}
+
+
+## Run a math-only trial (math problems, no letters)
+## Returns [result, mathCorrect, mathTotal, mathAccuracy]
+define RunMathTrial(numProblems, feedback)
+{
+  ## Build stages list - just distraction tasks
+  stages <- Repeat("D", numProblems)
+
+  ## Use existing PresentRun but with no letters
+  result <- PresentRun(-1, 0, 0, stages, feedback)
+
+  ## Log practice trial
+  ProcessRunResult(stages, result, 1, [-1, 0, 0])
+
+  ## Calculate math statistics from this trial
+  mathCorrect <- 0
+  mathTotal <- 0
+  loop(item, result)
+  {
+    if(First(item) == "D")
+    {
+      mathTotal <- mathTotal + 1
+      if(Nth(item, 2) == 1)  ## 1 = correct
+      {
+        mathCorrect <- mathCorrect + 1
+      }
+    }
+  }
+
+  ## Calculate accuracy
+  if(mathTotal > 0)
+  {
+    mathAccuracy <- mathCorrect / mathTotal
+  } else {
+    mathAccuracy <- 0
+  }
+
+  ## Return list: [result, mathCorrect, mathTotal, mathAccuracy]
+  return [result, mathCorrect, mathTotal, mathAccuracy]
+}
+
+
+## Check if math performance meets criteria
+define CheckMathCriteria(threshold)
+{
+  if(gTotNumDistract == 0)
+  {
+    rval <- 1  ## No practice yet, allow to proceed
+  } else {
+    accuracy <- gNumCorrectDistract / gTotNumDistract
+    rval <- accuracy >= threshold
+  }
+
+  return rval
+}
+
+
+## Update accuracy and trial counter labels with current information
+define UpdateStatusLabels(currentTrial, totalTrials)
+{
+  if(gAccuracyLabel != 0)
+  {
+    ## Calculate current accuracy percentage
+    if(gTotNumDistract > 0)
+    {
+      accuracy <- Round((gNumCorrectDistract / gTotNumDistract) * 100)
+      SetText(gAccuracyLabel, "Accuracy: " + accuracy + "%")
+    } else {
+      SetText(gAccuracyLabel, "Accuracy: 0%")
+    }
+  }
+
+  if(gTrialCounterLabel != 0)
+  {
+    SetText(gTrialCounterLabel, "Test " + currentTrial + "/" + totalTrials)
+  }
+
+  if(gAccuracyLabel != 0 or gTrialCounterLabel != 0)
+  {
+    Draw()
+  }
+}
+
+
+## Calculate math timeout based on practice performance
+define CalculateMathTimeout()
+{
+  if(Length(gTimesDistract) == 0)
+  {
+    Print("DEBUG: No practice times available, using minimum timeout: " + gDistractTimeoutMinimum)
+    rval <- gDistractTimeoutMinimum
+  } else {
+    avgTime <- Mean(gTimesDistract)
+    sdTime <- StdDev(gTimesDistract)
+    timeout <- avgTime + (gDistractTimeoutMultiplier * sdTime)
+    rval <- Max([timeout, gDistractTimeoutMinimum])
+
+    Print("DEBUG: gTimesDistract = " + gTimesDistract)
+    Print("DEBUG: Mean time = " + avgTime + " ms, SD = " + sdTime + " ms")
+    Print("DEBUG: Multiplier = " + gDistractTimeoutMultiplier)
+    Print("DEBUG: Calculated timeout = " + timeout + " ms")
+    Print("DEBUG: Final timeout (max with minimum) = " + rval + " ms")
+  }
+
+  ## Round to integer for RegisterEvent compatibility
+  return Round(rval)
+}
+
+
+## Generate trial sequence for battery
+define GenerateTrialSequence(reps, setSizes)
+{
+  ## Create a flat list with 'reps' of each set size
+  trialList <- Flatten(ShuffleRepeat(setSizes, reps))
+
+  return trialList
+}
+
+
+## Run a battery of trials
+## Returns [results, mathCorrect, mathTotal, mathAccuracy]
+define RunBatteryBlock(reps, setSizes, letterDuration, showFeedback, mathThreshold, phaseType)
+{
+  ## Calculate math timeout from practice performance
+  Print("DEBUG: ========== Starting " + phaseType + " battery ==========")
+  Print("DEBUG: Total practice trials recorded: " + Length(gTimesDistract))
+  mathTimeout <- CalculateMathTimeout()
+  Print("DEBUG: Math timeout set to: " + mathTimeout + " ms for " + phaseType + " phase")
+
+  ## Create status labels for test phase
+  if(phaseType == "test")
+  {
+    ## Create blue font 50% bigger for status labels
+    blueColor <- MakeColor("blue")
+    labelFontSize <- Round(gLgFontSz * 1.5)
+    statusFont <- MakeFont(gPEBLBaseFont, 0, labelFontSize, blueColor, gBGColor, 0)
+
+    ## Create accuracy label
+    gAccuracyLabel <- MakeLabel("Accuracy: 0%", statusFont)
+    AddObject(gAccuracyLabel, gWin)
+
+    ## Position accuracy label in subheader zone on the right
+    accLabelX <- gVideoWidth - 150  ## More space from right for longer text
+    accLabelY <- gLayout.zones.subheader.y - 5
+    Move(gAccuracyLabel, accLabelX, accLabelY)
+
+    ## Create trial counter label
+    gTrialCounterLabel <- MakeLabel("Test 0/0", statusFont)
+    AddObject(gTrialCounterLabel, gWin)
+
+    ## Position trial counter label below accuracy label
+    trialLabelX <- gVideoWidth - 150
+    trialLabelY <- accLabelY + labelFontSize + 5
+    Move(gTrialCounterLabel, trialLabelX, trialLabelY)
+
+    Draw()
+
+    Print("Status labels created at (" + accLabelX + ", " + accLabelY + ")")
+  }
+
+  ## Generate trial sequence
+  trialList <- GenerateTrialSequence(reps, setSizes)
+  Print("Trial sequence: " + trialList)
+  totalTrials <- Length(trialList)
+
+  ## Run trials
+  results <- []
+  batteryMathCorrect <- 0
+  batteryMathTotal <- 0
+  currentTrialNum <- 0
+
+  loop(setSize, trialList)
+  {
+    currentTrialNum <- currentTrialNum + 1
+
+    ## Update status labels for test phase BEFORE running trial
+    if(phaseType == "test")
+    {
+      UpdateStatusLabels(currentTrialNum, totalTrials)
+    }
+
+    ## Build stages: alternating D and T
+    stages <- []
+    loop(i, Sequence(1, setSize, 1))
+    {
+      stages <- Append(stages, "D")
+      stages <- Append(stages, "T")
+    }
+
+    ## Run the trial
+    result <- PresentRun(mathTimeout, letterDuration, setSize, stages, showFeedback)
+    results <- Append(results, result)
+
+    ## Count math performance in this trial
+    loop(item, result)
+    {
+      if(First(item) == "D")
+      {
+        batteryMathTotal <- batteryMathTotal + 1
+        if(Nth(item, 2) == 1)  ## 1 = correct
+        {
+          batteryMathCorrect <- batteryMathCorrect + 1
+        }
+      }
+    }
+
+    ## Log to file
+    ProcessRunResult(stages, result, 1, [mathTimeout, letterDuration, setSize])
+
+    gTrial <- gTrial + 1
+  }
+
+  ## Calculate accuracy
+  if(batteryMathTotal > 0)
+  {
+    batteryMathAccuracy <- batteryMathCorrect / batteryMathTotal
+  } else {
+    batteryMathAccuracy <- 0
+  }
+
+  ## Remove status labels for test phase
+  if(phaseType == "test")
+  {
+    if(gAccuracyLabel != 0)
+    {
+      RemoveObject(gAccuracyLabel, gWin)
+      gAccuracyLabel <- 0
+    }
+    if(gTrialCounterLabel != 0)
+    {
+      RemoveObject(gTrialCounterLabel, gWin)
+      gTrialCounterLabel <- 0
+    }
+    Draw()
+    Print("Status labels removed")
+  }
+
+  ## Return list: [results, mathCorrect, mathTotal, mathAccuracy]
+  return [results, batteryMathCorrect, batteryMathTotal, batteryMathAccuracy]
+}
+
+
+## Execute a block of tasks
+## Returns [results, mathCorrect, mathTotal, mathAccuracy]
+define ExecuteTaskBlock(block, phaseType)
+{
+  Print("Executing task block: " + phaseType)
+
+  LSLMarker("block_" + phaseType + "_start")
+
+  results <- []
+  blockMathCorrect <- 0
+  blockMathTotal <- 0
+
+  loop(task, block)
+  {
+    taskType <- First(task)
+
+    if(taskType == "instruction")
+    {
+      instructKey <- Nth(task, 2)
+      timeout <- -1
+      if(Length(task) > 2)
+      {
+        timeout <- Nth(task, 3)
+      }
+      ShowInstruction(instructKey, timeout)
+
+    } elseif(taskType == "memory_only")
+    {
+      numLetters <- Nth(task, 2)
+      letterDuration <- Nth(task, 3)
+      showFeedback <- Nth(task, 4)
+      result <- RunMemoryTrial(numLetters, letterDuration, showFeedback)
+      results <- Append(results, result)
+      ## gTrial is incremented inside RunMemoryTrial
+
+    } elseif(taskType == "math_only")
+    {
+      numProblems <- Nth(task, 2)
+      showFeedback <- Nth(task, 3)
+      trialStats <- RunMathTrial(numProblems, showFeedback)
+      results <- Append(results, trialStats)
+
+      ## Accumulate math statistics from this trial
+      ## trialStats format: [result, mathCorrect, mathTotal, mathAccuracy]
+      blockMathCorrect <- blockMathCorrect + Nth(trialStats, 2)
+      blockMathTotal <- blockMathTotal + Nth(trialStats, 3)
+      ## gTrial is incremented inside RunMathTrial
+
+    } elseif(taskType == "battery")
+    {
+      ## Extract parameters from battery task definition
+      ## Format: ["battery", reps, setSizes, letterDuration, showFeedback, mathThreshold]
+      reps <- Nth(task, 2)
+      setSizes <- Nth(task, 3)
+      letterDuration <- Nth(task, 4)
+      showFeedback <- Nth(task, 5)
+      mathThreshold <- Nth(task, 6)
+      batteryStats <- RunBatteryBlock(reps, setSizes, letterDuration, showFeedback, mathThreshold, phaseType)
+      results <- Append(results, batteryStats)
+
+      ## Accumulate math statistics from battery
+      ## batteryStats format: [results, mathCorrect, mathTotal, mathAccuracy]
+      blockMathCorrect <- blockMathCorrect + Nth(batteryStats, 2)
+      blockMathTotal <- blockMathTotal + Nth(batteryStats, 3)
+    } else {
+      SignalFatalError("Unknown task type: " + taskType)
+    }
+  }
+
+  ## Calculate block accuracy
+  if(blockMathTotal > 0)
+  {
+    blockMathAccuracy <- blockMathCorrect / blockMathTotal
+  } else {
+    blockMathAccuracy <- 0
+  }
+
+  LSLMarker("block_" + phaseType + "_end")
+
+  ## Return list: [results, mathCorrect, mathTotal, mathAccuracy]
+  return [results, blockMathCorrect, blockMathTotal, blockMathAccuracy]
+}
+
+
+##############################################################################
+## END NEW SYSTEM
+##############################################################################
+
+
+## Calculate span score and statistics for HTML report
+## testStats format: [results, symmetryCorrect, symmetryTotal, symmetryAccuracy]
+## testStartTrial: trial number where test battery began (to filter out practice)
+## testDuration: test duration in seconds
+define CalculateSpanReport(testStats, testStartTrial, testDuration)
+{
+  Print("Generating span report...")
+  Print("DEBUG: testStats = " + testStats)
+  Print("DEBUG: Length(testStats) = " + Length(testStats))
+  Print("DEBUG: testStartTrial = " + testStartTrial)
+  Print("DEBUG: testDuration = " + testDuration + " seconds")
+
+  ## Extract test battery results
+  ## testStats from ExecuteTaskBlock: [results, blockMathCorrect, blockMathTotal, blockMathAccuracy]
+  ## results contains [batteryStats] from RunBatteryBlock
+  ## batteryStats is [results, mathCorrect, mathTotal, mathAccuracy]
+
+  results <- First(testStats)
+  Print("DEBUG: results = " + results)
+  Print("DEBUG: Length(results) = " + Length(results))
+
+  batteryStats <- First(results)
+  Print("DEBUG: batteryStats = " + batteryStats)
+  Print("DEBUG: Length(batteryStats) = " + Length(batteryStats))
+
+  ## Symmetry accuracy from test battery
+  symmetryCorrect <- Nth(batteryStats, 2)
+  symmetryTotal <- Nth(batteryStats, 3)
+  symmetryAccuracy <- Nth(batteryStats, 4)
+
+  ## Read CSV file to organize trials by set size
+  csvData <- ReadCSV(gSubOut.filename)
+
+  ## Organize trials by set size - use dynamic range from parameters
+  ## CSV columns: subnum,trial,probtime,memtime,length,numstim,stim,resp,memcorr,...
+  setSizes <- Sequence(gTestMinSize, gTestMaxSize, 1)
+  numLengths <- Length(setSizes)
+
+  ## Initialize empty lists for each set size
+  trialsByLength <- []
+  loop(i, Sequence(1, numLengths, 1))
+  {
+    trialsByLength <- Append(trialsByLength, [])
+  }
+
+  ## Process CSV rows (skip header), FILTER to only include test trials
+  loop(row, Rest(csvData))
+  {
+    if(Length(row) >= 9)
+    {
+      ## Column 2 is trial number - only process test trials
+      rowTrial <- ToNumber(Nth(row, 2))
+      rowSetSize <- ToNumber(Nth(row, 5))  ## Column 5 is length
+
+      ## IMPORTANT: Only include trials from test battery (trial >= testStartTrial)
+      if(rowTrial >= testStartTrial and rowSetSize >= gTestMinSize and rowSetSize <= gTestMaxSize)
+      {
+        ## Calculate index for this set size
+        idx <- rowSetSize - gTestMinSize + 1
+
+        ## Bounds check idx to prevent crashes from corrupted data
+        if(idx >= 1 and idx <= numLengths)
+        {
+          ## memcorr is column 9 - true/false for perfect recall
+          memcorr <- Lowercase(Nth(row, 9))
+          if(memcorr == "true" or memcorr == "1")
+          {
+            SetElement(trialsByLength, idx, Append(Nth(trialsByLength, idx), 1))
+          } else {
+            SetElement(trialsByLength, idx, Append(Nth(trialsByLength, idx), 0))
+          }
+        }
+      }
+    }
+  }
+
+  ## Calculate span score: base + sum of proportions correct at each set size
+  ## Base assumes perfect performance on all set sizes below testMinSize
+  spanScore <- gTestMinSize - 1.0
+
+  loop(i, Sequence(1, Length(trialsByLength), 1))
+  {
+    trials <- Nth(trialsByLength, i)
+    correct <- Sum(trials)
+    total <- Length(trials)
+
+    ## Add proportion correct for this set size
+    if(total > 0)
+    {
+      spanScore <- spanScore + (correct / total)
+    }
+  }
+
+  ## Calculate statistics by set size for report table
+  statsBySize <- []
+  loop(i, Sequence(1, Length(setSizes), 1))
+  {
+    setSize <- Nth(setSizes, i)
+    trials <- Nth(trialsByLength, i)
+    correct <- Sum(trials)
+    total <- Length(trials)
+
+    if(total > 0)
+    {
+      accuracy <- Round((correct / total) * 100)
+    } else {
+      accuracy <- 0
+    }
+
+    statsBySize <- Append(statsBySize, [setSize, correct, total, accuracy])
+  }
+
+  ## Build report property list
+  report <- MakeCustomObject("spanreport")
+  report.participant <- gSubNum
+  report.spanScore <- spanScore
+  report.symmetryCorrect <- symmetryCorrect
+  report.symmetryTotal <- symmetryTotal
+  report.symmetryAccuracy <- Round(symmetryAccuracy * 100)
+  report.statsBySize <- statsBySize
+  report.testDuration <- testDuration  ## Test duration in seconds
+
+  Print("Span score: " + Round(spanScore, 2))
+  Print("Symmetry accuracy: " + report.symmetryAccuracy + "%")
+  Print("Test duration: " + testDuration + " seconds")
+
+  return report
+}
+
+
+## Generate HTML report file
+define CreateHTMLReport(reportData)
+{
+  Print("Creating HTML report...")
+
+  ## Extract data from report
+  participant <- reportData.participant
+  spanScore <- reportData.spanScore
+  symmetryCorrect <- reportData.symmetryCorrect
+  symmetryTotal <- reportData.symmetryTotal
+  symmetryAccuracy <- reportData.symmetryAccuracy
+  statsBySize <- reportData.statsBySize
+  testDuration <- reportData.testDuration
+
+  ## Create HTML file
+  subNoSpc <- ReplaceChar(participant + "", [" ", "/", "\", ",", ":"], "_")
+  htmlFile <- GetNewDataFile(subNoSpc, gWin, "symmetryspan-report", "html", "")
+
+  ## Write HTML header and styles
+  FilePrint(htmlFile, "<html><head><title>Symmetry Span Report - " + participant + "</title>")
+  FilePrint(htmlFile, "<style>")
+  FilePrint(htmlFile, "body { font-family: Arial, sans-serif; margin: 20px; background-color: #f5f5f5; }")
+  FilePrint(htmlFile, "h1 { color: #333; border-bottom: 2px solid #007bff; padding-bottom: 10px; }")
+  FilePrint(htmlFile, "h2 { color: #555; margin-top: 30px; }")
+  FilePrint(htmlFile, ".summary { background: white; padding: 20px; border-radius: 8px; margin: 20px 0; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }")
+  FilePrint(htmlFile, ".metric { margin: 10px 0; font-size: 16px; }")
+  FilePrint(htmlFile, ".metric strong { color: #007bff; }")
+  FilePrint(htmlFile, "table { border-collapse: collapse; width: 100%; margin: 20px 0; background: white; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }")
+  FilePrint(htmlFile, "th { background-color: #007bff; color: white; padding: 12px; text-align: left; }")
+  FilePrint(htmlFile, "td { padding: 10px; border-bottom: 1px solid #ddd; }")
+  FilePrint(htmlFile, "tr:hover { background-color: #f5f5f5; }")
+  FilePrint(htmlFile, "</style>")
+  FilePrint(htmlFile, "</head><body>")
+
+  ## Main title
+  FilePrint(htmlFile, "<h1>Symmetry Span (SYMSPAN) Test Report</h1>")
+
+  ## Summary section
+  FilePrint(htmlFile, "<div class='summary'>")
+  FilePrint(htmlFile, "<h2>Summary</h2>")
+  FilePrint(htmlFile, "<div class='metric'><strong>Participant:</strong> " + participant + "</div>")
+  FilePrint(htmlFile, "<div class='metric'><strong>Span Score:</strong> " + Round(spanScore, 2) + "</div>")
+  FilePrint(htmlFile, "<div class='metric'><strong>Symmetry Accuracy:</strong> " + symmetryCorrect + "/" + symmetryTotal + " (" + symmetryAccuracy + "%)</div>")
+  FilePrint(htmlFile, "<div class='metric'><strong>Test Duration:</strong> " + testDuration + " seconds</div>")
+  FilePrint(htmlFile, "</div>")
+
+  ## Performance by set size table
+  FilePrint(htmlFile, "<h2>Performance by Set Size</h2>")
+  FilePrint(htmlFile, "<table>")
+  FilePrint(htmlFile, "<tr><th>Set Size</th><th>Correct</th><th>Total</th><th>Accuracy (%)</th></tr>")
+
+  loop(row, statsBySize)
+  {
+    setSize <- Nth(row, 1)
+    correct <- Nth(row, 2)
+    total <- Nth(row, 3)
+    accuracy <- Nth(row, 4)
+
+    FilePrint(htmlFile, "<tr>")
+    FilePrint(htmlFile, "<td>" + setSize + "</td>")
+    FilePrint(htmlFile, "<td>" + correct + "</td>")
+    FilePrint(htmlFile, "<td>" + total + "</td>")
+    FilePrint(htmlFile, "<td>" + accuracy + "%</td>")
+    FilePrint(htmlFile, "</tr>")
+  }
+
+  FilePrint(htmlFile, "</table>")
+
+  ## Data Files section
+  FilePrint(htmlFile, "<h2>Data Files</h2>")
+  FilePrint(htmlFile, "<div class='summary'>")
+  FilePrint(htmlFile, "<p>The following data files were generated for this session:</p>")
+  FilePrint(htmlFile, "<ul>")
+
+  ## Extract just the filename from the full path for display
+  csvFilename <- Nth(SplitString(gSubOut.filename, "/"), Length(SplitString(gSubOut.filename, "/")))
+  logFilename <- Nth(SplitString(gPositionLog.filename, "/"), Length(SplitString(gPositionLog.filename, "/")))
+  reportFilename <- Nth(SplitString(htmlFile.filename, "/"), Length(SplitString(htmlFile.filename, "/")))
+
+  FilePrint(htmlFile, "<li><a href='" + csvFilename + "'>" + csvFilename + "</a> - Trial-by-trial data</li>")
+  FilePrint(htmlFile, "<li><a href='" + logFilename + "'>" + logFilename + "</a> - Symmetry problem log</li>")
+  FilePrint(htmlFile, "<li><a href='" + reportFilename + "'>" + reportFilename + "</a> - This report</li>")
+  FilePrint(htmlFile, "</ul>")
+  FilePrint(htmlFile, "</div>")
+
+  ## Footer
+  FilePrint(htmlFile, "<p style='margin-top: 40px; color: #666; font-size: 12px;'>")
+  FilePrint(htmlFile, "Report generated: " + TimeStamp())
+  FilePrint(htmlFile, "</p>")
+
+  FilePrint(htmlFile, "</body></html>")
+
+  FileClose(htmlFile)
+
+  Print("HTML report created: " + htmlFile.filename)
+
+  return htmlFile
+}
+
+
+define PartialCorrect(target,resp,split)
+{
+
+   targlist <- SplitString(target,split)
+   resplist <- SplitString(resp,split)
+
+   targlength <- Length(targlist)
+   resplength <- Length(resplist)
+
+   ##add stuff to the shorter one, if they are different lengths.
+
+   if(targlength < resplength)
+    {
+       targlist <-  Append(targlist, Repeat("DUMMY",resplength-targlength))
+    }
+
+
+   if(targlength > resplength)
+    {
+       resplist <-  Append(resplist, Repeat("DUMMY",-resplength+targlength))
+    }
+
+   matches <-0
+   n <- 0
+   
+   loop(pair, Transpose([targlist,resplist]))
+   {
+     if(First(pair)==Second(pair))
+     {
+       matches <- matches + 1
+     }
+      n <- n + 1
+   }
+
+
+   return(matches/n)
+}

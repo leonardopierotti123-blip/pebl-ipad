@@ -1,0 +1,17 @@
+{
+"INST1": "In this task, you will see and/or hear a series of stimuli.  For each stimulus, you will need to determine whether it was the same as one you saw previously.  To start, we will use one-back as the rule.  Press the <LEFT> key when the letter matches one-back.  We will start with a short practice round. Press any key to begin.",
+"INST2": "Great.  Now, you will try to do the same thing with two-back. Press the <LEFT> key when the letter matches two-back.  For example: \n A (NO)\nC (NO)\n A (YES)\n A (NO)\n A (YES)",
+"INST3": "Great.  Now, you will try to do the same thing with two-back. Press the <LEFT> key when the number matches two-back.  For example: \n 1 (NO)\n2 (NO)\n 1 (YES)\n 1 (NO)\n 1 (YES)",
+    "INST4": "In addition, you will need to make the same judgment about a second dimension.  In this case, the position indicated in the grid. Press the <RIGHT> key when the position matches one-back. Let's try a single one-back round.",
+    "INST5": "Finally, you will need to put these all together. We will start with a dual 1-back task.  In this task, make responses with both the right and left hand, depending on whether each kind of stimulus matches the previous one. You may need to respond with one, both, or neither of the response keys depending on the configuration.",
+"TESTBLOCK": "This is a testing block, and your scores will be recorded.  Try to be as accurate as possible. This block will be a <N>-back block.",
+"DEBRIEF": "Thank you for participating in this study.",
+"FOOTER": "press when match occurs",
+"HEADER": "Match [<N>] back",
+"LEFT": "LEFT",
+"RIGHT": "RIGHT",
+"BEGIN": "Press any key to begin.",
+"LETTER": "LETTER",
+"NUMBER": "NUMBER",
+"SQUARES": "SQUARES"
+}

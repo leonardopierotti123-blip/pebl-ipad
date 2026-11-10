@@ -1,0 +1,68 @@
+{
+  "test": "SimpleRT",
+  "version": "1.0",
+  "description": "SIMPLERT Test",
+  "parameters": [
+    {
+      "name": "blocks",
+      "type": "integer",
+      "default": 4,
+      "description": "The number of trial blocks"
+    },
+    {
+      "name": "blocklength",
+      "type": "integer",
+      "default": 50,
+      "description": "The number of trials per block"
+    },
+    {
+      "name": "delayMin",
+      "type": "integer",
+      "default": 250,
+      "description": "Smallest delay"
+    },
+    {
+      "name": "delayMax",
+      "type": "integer",
+      "default": 2500,
+      "description": "longest delay"
+    },
+    {
+      "name": "delayStep",
+      "type": "integer",
+      "default": 250,
+      "description": "Step between small and longest"
+    },
+    {
+      "name": "stimulus",
+      "type": "string",
+      "default": "X",
+      "description": "Stimulus character"
+    },
+    {
+      "name": "toofastThresh",
+      "type": "integer",
+      "default": 150,
+      "description": "too fast time in ms"
+    },
+    {
+      "name": "tooslowThresh",
+      "type": "integer",
+      "default": 3000,
+      "description": "Too slow time in ms"
+    },
+    {
+      "name": "responsemode",
+      "type": "string",
+      "default": "spacebar",
+      "description": "Response input mode",
+      "options": [
+        "spacebar",
+        "leftclick",
+        "touchscreen",
+        "clicktarget",
+        "userselect"
+      ]
+    }
+  ]
+}

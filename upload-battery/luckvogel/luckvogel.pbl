@@ -1,0 +1,438 @@
+## Basic Luck and Vogel change-detection task.
+##
+##
+
+define Start(p)
+{
+  ## Initialize upload system (works for both online and native)
+  InitializeUpload()
+
+  parpairs <- [["fieldWidth",400],
+               ["fieldheight",400],
+               ["squaresize",50],
+	       ["prestime",300],
+	       ["delaytime",1000],
+	       ["length1",1],
+	       ["length2",2],
+	       ["length3",3],
+	       ["length4",4],
+	       ["length5",8],
+	       ["length6",12],
+	       ["trialsperlength",10], ##per length and same/diff condition
+	       ["givefeedback",1],
+	       ["blocksize",40],
+	       ["useAudiofeedback",1],
+               ["responsemode","auto"]  ##Response mode for Layout & Response System
+              ]
+
+  gParams <- CreateParameters(parpairs,gParamFile)
+  gParams.responsesemantics <- "2afc"
+
+
+   gParams.length <- [gParams.length1,gParams.length2,gParams.length3,
+                      gparams.length4,gParams.length5,gParams.length6]
+
+
+   if(gParams.UseAudioFeedback)
+   {
+     gCorrectSound <- LoadSound("correct.ogg")
+     gIncorrectSound <-LoadSound("buzz500ms.ogg")
+   }
+
+
+   ##These should be basically color-blind safe:
+   gCols <- [MakeColorRGB(230,159,0),  #orange
+   	    MakeColorRGB(86,180,233),  #skyblue
+	    MakeColorRGB(0,158,115),   #blue-green
+      	    MakeColorRGB(240,228,66),  #yellow
+	    MakeColorRGB(213,94,0), #vermillion (red)
+            MakeColorRGB(255,255,255),  #white
+            MakeColorRGB(0,0,0)         #Black
+           ]
+
+   gColNames <- ["orange","skyblue","bluegreen","yellow","red","white","black"]
+   gShapeNames <- ["circle","square","plus","ellipse","star"]
+
+
+  gScriptName <- "PEBL Visual Change Detection Task"
+
+  gWin <- MakeWindow("black")
+  InitializeLSL(gWin)  ## Initialize LSL outlet if --lsl flag was used
+  gSleepEasy <- 1
+  ShowCursor(0)
+
+  if(gSubNum+""=="0")
+   {
+      gSubNum <- GetSubNum(gWin)
+   }
+
+  GetStrings(gLanguage)
+
+  ## Set response labels to translated SAME/DIFFERENT
+  ## left = same (no change), right = different (change detected)
+  gParams.responselabels <- [gStrings.same, gStrings.different]
+
+  ## Create layout with response system AFTER GetSubNum
+  gLayout <- CreateLayout("luckvogel", gWin, gParams)
+  gLayout.header.visible <- 1
+  gLayout.subheader.visible <- 1
+  gLayout.footer.text <- gStrings.footer
+
+  ## Show cursor only for mousetarget mode (not touchtarget - no cursor on touch screens)
+  if(gLayout.responseMode.type == "mousetarget")
+  {
+    ShowCursor(1)
+  }
+
+  gFileOut <- GetNewDataFile(gSubNum,gWin,"luckvogel","csv",
+               "subnum,trial,abstime,prestime,delay,size,same,resp,corr,rt")
+
+  ## Scale field to fit within stimulus region
+  ## Ensure it doesn't overflow on small screens (800x600)
+  ## Leave substantial margins for visibility
+  maxWidth <- gLayout.stimulusRegion.width - 60
+  maxHeight <- gLayout.stimulusRegion.height - 60
+
+  gFieldWidth <- Min([gParams.fieldwidth, maxWidth])
+  gFieldHeight <- Min([gParams.fieldheight, maxHeight])
+
+  ## Make square if needed
+  minDim <- Min([gFieldWidth, gFieldHeight])
+  gFieldWidth <- minDim
+  gFieldHeight <- minDim
+
+  ## Calculate scale factor for square size
+  ## If we scaled down the field, we need to scale down squares too
+  gScaleFactor <- gFieldWidth / gParams.fieldwidth
+  gSquareSize <- gParams.squaresize * gScaleFactor
+
+  ## Debug: print dimensions
+  Print("Stimulus region: " + gLayout.stimulusRegion.width + "x" + gLayout.stimulusRegion.height)
+  Print("Field size: " + gFieldWidth + "x" + gFieldHeight)
+  Print("Scale factor: " + gScaleFactor)
+  Print("Square size: " + gSquareSize + " (original: " + gParams.squaresize + ")")
+  Print("Layout center: (" + gLayout.centerX + ", " + gLayout.centerY + ")")
+
+  ## Background field positioned in stimulus region center
+  bgField <- Rectangle(gLayout.centerX, gLayout.centerY,
+               gFieldWidth, gFieldHeight,
+              MakeColor("grey50"), 1)
+  AddObject(bgField, gWin)
+
+  ## Status message uses header - create fonts for correct (green) and incorrect (red) feedback
+  gFontCorrect <- Makefont(gPEBLBaseFont,0,50,MakeColor("darkgreen"),MakeColor("black"),1)
+  gFontIncorrect <- Makefont(gPEBLBaseFont,0,50,MakeColor("red"),MakeColor("black"),1)
+  gFontReady <- Makefont(gPEBLBaseFont,0,50,MakeColor("white"),MakeColor("black"),1)
+
+   ## Position instruction textbox at top of screen to avoid overlapping example stimuli
+   ## Make it smaller to leave more room for stimuli
+   instbox <- AdaptiveTextBox(gStrings.inst,
+                              20,
+                              20,
+                              gWin, 24,
+                              gVideoWidth - 40,
+                              100,
+                              "scalefont")
+
+   displays <- MakeStimSet(5,"box",1)
+   cont <- 1
+   ShowAll(First(displays),1)
+   Draw()
+   WaitForAnyKeyPress()
+
+   instbox.text <- instbox.text + gStrings.continue
+   ShowAll(First(displays),0)
+   Draw()
+   Wait(1000)
+   gLayout.header.text <- gStrings.headersame
+   while(cont)
+   {
+
+     displays <- MakeStimSet(5,"box",1)
+     ShowAll(First(displays),1)
+     Draw()
+     Wait(500)
+     ShowAll(First(displays),0)
+     Draw()
+     Wait(1000)
+     ShowAll(First(displays),1)
+     Draw()
+     out <-  WaitForListKeyPress([" ","X"])
+     ShowAll(First(displays),0)
+     Draw()
+     Wait(1000)
+     cont <- (out==" ")
+
+   }
+
+  instbox.text <-gStrings.inst2
+
+   gLayout.header.text <-gStrings.headerdifferent
+   Draw()
+   WaitForAnyKeyPress()
+
+   instbox.text <- instbox.text +gStrings.continue2
+    cont <- 1
+
+  while(cont)
+   {
+    displays <- MakeStimSet(5,"box",1)
+    ShowAll(First(displays),1)
+     Draw()
+     Wait(500)
+     ShowAll(First(displays),0)
+     Draw()
+     Wait(1000)
+     ShowAll(Second(displays),1)
+     Draw()
+     out <-  WaitForListKeyPress([" ","X"])
+     ShowAll(Second(displays),0)
+     Draw()
+     Wait(1000)
+     cont <- (out==" ")
+
+   }
+
+
+   instbox.text <- gStrings.inst3
+   gLayout.header.text <- gStrings.header
+   gLayout.footer.visible <- 1
+   Draw()
+   WaitForAnyKeyPress()
+   Hide(instbox)
+   CountDown(gWin)
+
+   loop(i,[1,0,1,0,0,1])
+     {
+       out <-  TrialSquares(3,i,0,0)
+     }
+
+  design <- DesignFullCounterbalance(gParams.length,[0,1])
+  stim <- Shuffle(RepeatList(design,gParams.trialsperlength))
+  gTotalTrials <- Length(stim)
+
+   instbox.text <-gStrings.inst4
+   Show(instbox)
+   Draw()
+   WaitForAnyKeyPress()
+   Hide(instbox)
+   CountDown(gWin)
+
+   ##also, burn a couple trials of the test set:
+   out <-  TrialSquares(3,1,0,0)
+   out <-  TrialSquares(3,0,0,0)
+
+   trial <- 1
+   LSLMarker("block_test_start")
+   loop(i,stim)
+    {
+      LSLMarker("trial_" + trial + "_size" + First(i) + "_change" + Second(i) + "_start")
+      out <-  TrialSquares(First(i),Second(i),trial,gTotalTrials)
+      FilePrint(gfileOut,gSubNum+","+trial+","+GetTime()+","+gParams.prestime+","+gParams.delaytime+","+
+                First(i)+","+First(out)+","+Second(out)+","+Third(out)+","+Fourth(out))
+
+     if(Mod(trial,gParams.blocksize)==0)
+     {
+     breaktext <- ReplaceChar(gStrings.break,"<TRIAL>",trial+"")
+     breaktext <- ReplaceChar(breaktext,"<LENGTH>",Length(stim)+"")
+
+
+       instbox.text <- breaktext
+       Show(instbox)
+       Draw()
+       Hide(instbox)
+        WaitForAnyKeyPress()
+        CountDown(gWin)
+        out <-  TrialSquares(3,1,0,0)
+        out <-  TrialSquares(3,0,0,0)
+
+     }
+
+      trial <- trial + 1
+    }
+   LSLMarker("block_test_end")
+
+  ## Finalize LSL
+  FinalizeLSL()
+
+  ## Display debrief message
+  instbox.text <- gStrings.debrief
+  Show(instbox)
+  Draw()
+  WaitForAnyKeyPress()
+
+  ## Close files before upload (required for Windows file locking compatibility)
+  FileClose(gFileOut)
+
+  ## Upload data files (works online, no-op on native)
+  ## Note: .filename property persists after FileClose(), so this is safe
+  out <- UploadFile(gSubNum, gFileOut.filename)
+  Print(out)
+}
+
+define TrialSquares(number,change,trial,total)
+{
+    ## Update trial counter in subheader (only if trial > 0)
+    if(trial > 0)
+    {
+      trialtext <- ReplaceChar(gStrings.trial_progress,"<TRIAL>",trial+"")
+      trialtext <- ReplaceChar(trialtext,"<TOTAL>",total+"")
+      gLayout.subheader.text <- trialtext
+    }
+
+    displays <- MakeStimSet(number,"box",change)
+    gLayout.header.text <- gStrings.ready
+    gLayout.header.font <- gFontReady
+    Draw()
+    Wait(500)
+    gLayout.header.text <- ""
+    Draw()
+    Wait(1000)
+
+    ShowAll(First(displays),1)
+    LSLMarker("stimulus_present")
+    Draw()
+    Wait(gParams.prestime)
+    ShowAll(First(displays),0)
+    Draw()
+    Wait(gParams.delaytime)
+    ShowAll(Second(displays),1)
+
+    Draw()
+
+    time1 <- GetTime()
+    resp <- WaitForLayoutResponse(gLayout, 10000)
+    time2 <- GetTime()
+
+    if(change)
+        {
+              corr <- resp=="right"
+        }else {
+              corr <- resp=="left"
+        }
+
+    LSLMarker("response_" + resp + "_corr" + corr)
+
+   if(gParams.givefeedback)
+   {
+      ShowAll(Second(displays),0)
+      gLayout.header.text <- Nth([gStrings.incorrect,gStrings.Correct],corr+1)
+      ## Change font color based on correctness
+      gLayout.header.font <- Nth([gFontIncorrect, gFontCorrect], corr+1)
+      Draw()
+      if(gParams.UseAudioFeedback)
+       {
+       if(corr)
+        {
+          PlayForeground(gCorrectSound)
+        }else{
+          PlayForeground(gIncorrectSound)
+        }
+      }
+
+
+      Wait(350)
+      gLayout.header.text <- ""
+      Draw()
+   }
+  return [change,resp,corr,(time2-time1)]
+}
+
+
+define MakeStimSet(number,type,change)
+{
+
+
+
+  if(type=="box")
+  {
+
+  ##create the positions here using layout center instead of video center
+  ##Use global gFieldWidth/gFieldHeight which are scaled to fit stimulus region
+  ##Use global gSquareSize which is scaled proportionally
+  gLeft <- gLayout.centerX-gFieldWidth/2 +gSquareSize/2+10
+  gRight <- gLayout.centerX+gFieldWidth/2-gSquareSize/2-10
+  gUpper <- gLayout.centerY-gFieldHeight/2+gSquareSize/2+10
+  gLower <- gLayout.centerY+gFieldHeight/2-gSquareSize/2-10
+
+    ##pick the colors (we have 7)
+    indices <- Shuffle(Sequence(1,7,1))
+    swaps <- SampleN(indices,2)  ##these won't match
+
+   if(number==1)
+    {
+      positions <- [[gLeft+Random()*(gRight-gLeft),
+                     gUpper+Random()*(gLower-gUpper)]]
+
+      colors1 <- [First(swaps)]
+     if(change)
+     {
+      colors2 <- [Second(swaps)]
+     }else{
+      colors2 <-[First(swaps)]
+     }
+
+    }else {
+
+     positions <- NonOverlapLayout(gLeft,gRight,gUpper,glower,
+                            gSquareSize*2,number)
+
+     rest <- DesignBalancedSampling(indices,number-1)
+     colors1 <- Append(rest,First(swaps))
+     if(change)
+     {
+      colors2 <- Append(rest,Second(swaps))
+     }else{
+      colors2 <- Append(rest,First(swaps))
+     }
+
+     }
+
+
+    cnames1 <- ExtractListItems(gColNames,colors1)
+    cnames2 <- ExtractListItems(gColNames,colors2)
+    col1 <- ExtractListItems(gCols,colors1)
+    col2 <- ExtractListItems(gCols,colors2)
+
+    display1 <- []
+    display2 <- []
+
+    loop(i,Sequence(1,number,1))
+    {
+        xy <- Nth(positions,i)
+	sq1a <- Square(First(xy),Second(xy),gSquareSize+4,  MakeColor("black"),1)
+        sq1 <- Square(First(xy),Second(xy),gSquareSize,  Nth(col1,i),1)
+	sq2a <- Square(First(xy),Second(xy),gSquareSize+4,  MakeColor("black"),1)
+        sq2 <- Square(First(xy),Second(xy),gSquareSize,  Nth(col2,i),1)
+
+        AddObject(sq1a,gWin)
+        AddObject(sq1,gWin)
+	AddObject(sq2a,gWin)
+	AddObject(sq2,gWin)
+
+	PushOnEnd(display1,sq1)
+	PushOnEnd(display1,sq1a)
+	PushOnEnd(display2,sq2)
+	PushOnEnd(display2,sq2a)
+    }
+
+  }
+ ShowAll(display1,0)
+ ShowAll(display2,0)
+ return [display1,display2]
+}
+
+
+define ShowAll(set,onoff)
+{
+   loop(i,set)
+    {
+      i.visible <- onoff
+    }
+}
+
+
+define GetStrings(lang)
+{
+  gStrings <- GetTranslations("luckvogel", lang)
+}

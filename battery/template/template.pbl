@@ -1,0 +1,250 @@
+##############################################################################
+## PEBL BATTERY TASK TEMPLATE
+##############################################################################
+##
+## This template demonstrates the PEBL Layout & Response System
+## with a simple trial-based structure.
+##
+##############################################################################
+
+define Start(p)
+{
+  ##--------------------------------------------------------------------------
+  ## 1. SETUP
+  ##--------------------------------------------------------------------------
+  gScriptname <- "Template Task"
+
+  ## Create window first for dialogs
+  gWin <- MakeWindow("black")
+
+  ## Ask user to choose response mode
+  responseChoice <- GetEasyChoice("Choose Response Mode:",
+                                   ["Keyboard (Shift Keys)", "Mouse (Click Targets)"],
+                                   [1, 2], gWin)
+
+  if(responseChoice == 1)
+  {
+    responseMode <- "keyboardShift"
+  } else {
+    responseMode <- "mousetarget"
+  }
+
+  ## Define parameters with chosen response mode
+  parpairs <- [
+    ["numPracticeTrials", 5],
+    ["numTestTrials", 20],
+    ["showFeedback", 1],
+    ["responsemode", responseMode]
+  ]
+  gParams <- CreateParameters(parpairs, gParamFile)
+
+  ## Get subject number
+  if(gSubNum+"" == "0")
+  {
+    gSubNum <- GetSubNum(gWin)
+  }
+
+  ## Load translations
+  GetStrings(gLanguage)
+
+  ##--------------------------------------------------------------------------
+  ## 2. CREATE LAYOUT
+  ##--------------------------------------------------------------------------
+  gLayout <- CreateLayout("template", gWin, gParams)
+
+  ## Configure layout zones for demonstration
+  gLayout.header.text <- "HEADER ZONE"
+  gLayout.subheader.text <- "SUBHEADER ZONE"
+  gLayout.footer.text <- "FOOTER ZONE"
+
+  ##--------------------------------------------------------------------------
+  ## 2.5 DRAW ZONE RECTANGLES (for demonstration)
+  ##--------------------------------------------------------------------------
+  ## Draw colored rectangles around each zone to visualize layout
+
+  ## Header zone rectangle (shrink by 4 pixels to prevent overlap)
+  headerRect <- Rectangle(gWin.width / 2, gLayout.zones.header.y + (gLayout.zones.header.height / 2),
+                         gWin.width - 24, gLayout.zones.header.height - 4,
+                         MakeColor("yellow"), 0)
+  AddObject(headerRect, gWin)
+
+  ## Subheader zone rectangle
+  subheaderRect <- Rectangle(gWin.width / 2, gLayout.zones.subheader.y + (gLayout.zones.subheader.height / 2),
+                            gWin.width - 24, gLayout.zones.subheader.height - 4,
+                            MakeColor("cyan"), 0)
+  AddObject(subheaderRect, gWin)
+
+  ## Stimulus zone rectangle
+  stimRect <- Rectangle(gLayout.stimulusRegion.centerX, gLayout.stimulusRegion.centerY,
+                       gLayout.stimulusRegion.width - 4, gLayout.stimulusRegion.height - 4,
+                       MakeColor("green"), 0)
+  AddObject(stimRect, gWin)
+
+  ## Response zone rectangle
+  responseRect <- Rectangle(gWin.width / 2, gLayout.zones.response.y + (gLayout.zones.response.height / 2),
+                           gWin.width - 24, gLayout.zones.response.height - 4,
+                           MakeColor("blue"), 0)
+  AddObject(responseRect, gWin)
+
+  ## Footer zone rectangle
+  footerRect <- Rectangle(gWin.width / 2, gLayout.zones.footer.y + (gLayout.zones.footer.height / 2),
+                         gWin.width - 24, gLayout.zones.footer.height - 4,
+                         MakeColor("red"), 0)
+  AddObject(footerRect, gWin)
+
+  ##--------------------------------------------------------------------------
+  ## 3. CREATE DATA FILE
+  ##--------------------------------------------------------------------------
+  gFileOut <- GetNewDataFile(gSubNum, gWin, "template", "csv",
+    "subnum,trial,phase,response,rt,timestamp")
+
+  ##--------------------------------------------------------------------------
+  ## 4. SHOW INSTRUCTIONS
+  ##--------------------------------------------------------------------------
+  Draw()
+  WaitForAnyKeyPress()
+
+  ##--------------------------------------------------------------------------
+  ## 5. PRACTICE TRIALS
+  ##--------------------------------------------------------------------------
+  if(gParams.numPracticeTrials > 0)
+  {
+    gLayout.footer.text <- gStrings.practiceInstructions
+    Draw()
+    WaitForAnyKeyPress()
+
+    loop(trial, Sequence(1, gParams.numPracticeTrials, 1))
+    {
+      result <- RunTrial("practice", trial, gWin)
+      response <- First(result)
+      rt <- Nth(result, 2)
+
+      FilePrint(gFileOut, gSubNum + "," + trial + ",practice," + response + "," + rt + "," + TimeStamp())
+    }
+
+    gLayout.footer.text <- gStrings.practiceComplete
+    Draw()
+    WaitForAnyKeyPress()
+  }
+
+  ##--------------------------------------------------------------------------
+  ## 6. TEST TRIALS
+  ##--------------------------------------------------------------------------
+  gLayout.footer.text <- gStrings.testInstructions
+  Draw()
+  WaitForAnyKeyPress()
+
+  loop(trial, Sequence(1, gParams.numTestTrials, 1))
+  {
+    result <- RunTrial("test", trial, gWin)
+    response <- First(result)
+    rt <- Nth(result, 2)
+
+    FilePrint(gFileOut, gSubNum + "," + trial + ",test," + response + "," + rt + "," + TimeStamp())
+  }
+
+  ##--------------------------------------------------------------------------
+  ## 7. DEBRIEFING
+  ##--------------------------------------------------------------------------
+  gLayout.header.text <- gStrings.complete
+  gLayout.footer.text <- gStrings.debrief
+
+  ## Hide response labels and stimulus
+  loop(label, gLayout.responseLabels)
+  {
+    label.visible <- 0
+  }
+
+  Draw()
+  Wait(3000)
+
+  ## Cleanup
+  FileClose(gFileOut)
+}
+
+##############################################################################
+## TRIAL FUNCTION
+##############################################################################
+
+define RunTrial(phase, trialNum, win)
+{
+  ## Update header with trial counter
+  gLayout.header.text <- gStrings.title + " - Trial " + trialNum
+
+  ## Show stimulus in center of stimulus region (two separate labels)
+  trialLabel <- EasyLabel("Trial " + trialNum,
+                          gLayout.stimulusRegion.centerX,
+                          gLayout.stimulusRegion.centerY - 30,
+                          win, 32)
+
+  ## Create instruction text based on response mode
+  instructText <- "Respond using the response options shown below"
+  if(gLayout.responseMode.type == "keyboard")
+  {
+    instructText <- "Press the keys shown below"
+  } else {
+    if(gLayout.responseMode.type == "mousetarget")
+    {
+      instructText <- "Click on one of the targets below"
+    } else {
+      if(gLayout.responseMode.type == "mousebutton")
+      {
+        instructText <- "Click with left or right mouse button"
+      }
+    }
+  }
+
+  instructLabel <- EasyLabel(instructText,
+                             gLayout.stimulusRegion.centerX,
+                             gLayout.stimulusRegion.centerY + 30,
+                             win, 24)
+
+  Draw()
+
+  ## Wait for response using layout response system
+  startTime <- GetTime()
+  response <- WaitForLayoutResponse(gLayout, 60000)
+  rt <- GetTime() - startTime
+
+  ## Clean up stimulus
+  Hide(trialLabel)
+  Hide(instructLabel)
+
+  ## Show feedback if enabled
+  if(gParams.showFeedback and phase == "practice")
+  {
+    feedbackLabel <- EasyLabel("Response: " + response + " - RT: " + Round(rt) + " ms",
+                               gLayout.stimulusRegion.centerX,
+                               gLayout.stimulusRegion.centerY,
+                               win, 24)
+    Draw()
+    Wait(500)
+    Hide(feedbackLabel)
+  }
+
+  ## Brief inter-trial interval
+  Draw()
+  Wait(250)
+
+  return([response, rt])
+}
+
+##############################################################################
+## HELPER FUNCTIONS
+##############################################################################
+
+define GetStrings(lang)
+{
+  ## Use default strings (translation system optional for this demo)
+  ##you can use GetTranslations(lang) to read in .json file and
+  ##allow user translations to other languages.
+  
+  gStrings <- MakeCustomObject("Strings")
+  gStrings.title <- "Template Task"
+  gStrings.instructions <- "Press any key to begin"
+  gStrings.practiceInstructions <- "Practice trials - Press any key when ready"
+  gStrings.practiceComplete <- "Practice complete! Press any key for test trials"
+  gStrings.testInstructions <- "Test trials - Press any key when ready"
+  gStrings.complete <- "Complete!"
+  gStrings.debrief <- "Thank you for participating"
+}
