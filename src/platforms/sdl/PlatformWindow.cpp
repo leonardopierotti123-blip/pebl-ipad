@@ -240,6 +240,15 @@ bool PlatformWindow::Initialize(PEBLVideoMode mode,
         y = SDL_WINDOWPOS_UNDEFINED;
     }
 
+#ifdef PEBL_IOS
+    //iOS windows always cover the whole screen.  Ask for a borderless
+    //full-screen, retina window; the script's requested size becomes the
+    //renderer's logical size below (letterboxed, aspect preserved).
+    vflags = SDL_WINDOW_FULLSCREEN | SDL_WINDOW_BORDERLESS | SDL_WINDOW_ALLOW_HIGHDPI;
+    x = SDL_WINDOWPOS_UNDEFINED;
+    y = SDL_WINDOWPOS_UNDEFINED;
+#endif
+
     mWindow =SDL_CreateWindow(sname.c_str(),x,y,
                               //SDL_WINDOWPOS_UNDEFINED,
                               //SDL_WINDOWPOS_UNDEFINED,
@@ -248,6 +257,16 @@ bool PlatformWindow::Initialize(PEBLVideoMode mode,
     ///This shouldn't be necessary, but if we specify the same screensize as the window, it goes to fake fullscreen mode.
 
     mRenderer = SDL_CreateRenderer(mWindow, -1,rflags);
+
+#ifdef PEBL_IOS
+    if(mRenderer)
+        {
+            //Scripts draw in their own coordinate system (e.g. 800x600 or
+            //the screen size in points).  SDL scales it to the retina drawable
+            //and maps touch/mouse coordinates back into it.
+            SDL_RenderSetLogicalSize(mRenderer, width, height);
+        }
+#endif
 //    mRenderer = SDL_CreateRenderer(mWindow,-1, SDL_RENDERER_ACCELERATED|SDL_RENDERER_TARGETTEXTURE|SDL_RENDERER_PRESENTVSYNC);
     //mRenderer = SDL_CreateSoftwareRenderer(SDL_GetWindowSurface(mWindow));
     //mRenderer = SDL_CreateRenderer(mWindow, -1, SDL_RENDERER_ACCELERATED|SDL_RENDERER_TARGETTEXTURE);

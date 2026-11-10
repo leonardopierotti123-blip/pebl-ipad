@@ -39,6 +39,9 @@
 #include "../../utility/PEBLUtility.h"
 #include "../../utility/FormatParser.h"
 #include "../../utility/FontCache.h"
+#ifdef PEBL_IOS
+#include "../ios/PEBLiOS.h"
+#endif
 
 
 #ifdef PEBL_OSX
@@ -754,6 +757,12 @@ void PlatformTextBox::SetEditable(bool val)
 
     // Call parent implementation
     PTextBox::SetEditable(val);
+
+#ifdef PEBL_IOS
+    // Bring up (or dismiss) the on-screen keyboard; on iOS SDL only delivers
+    // text input while text input is active.
+    PEBLiOS::SetKeyboardVisible(val);
+#endif
 
     // When making a textbox editable, clamp cursor to text length but preserve
     // any explicitly-set cursor position (e.g., from a click repositioning).

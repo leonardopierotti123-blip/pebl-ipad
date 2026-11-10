@@ -32,11 +32,15 @@
 
 #include "../apps/Globals.h"
 
-#ifdef PEBL_EMSCRIPTEN
+#if defined(PEBL_EMSCRIPTEN) || defined(PEBL_ITERATIVE_EVAL)
+//The iterative event loop is also used by native iOS builds (PEBL_IOS),
+//which need the iterative evaluator because of the small main-thread stack.
 #include "PEventLoop-es.h"
 //#include "../base/Evaluator-es.h"
 #include "../base/Evaluator.h"
+#ifdef PEBL_EMSCRIPTEN
 #include "emscripten.h"
+#endif
 #else
 #include "PEventLoop.h"
 #include "../base/Evaluator.h"

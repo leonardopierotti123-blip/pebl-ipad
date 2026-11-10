@@ -1,0 +1,729 @@
+## ios-launcher.pbl
+##
+## Touch launcher for PEBL on iPad.
+##
+## The iOS app (src/platforms/ios/PEBLiOSRunLoop.cpp) runs this script, which
+## lists the battery tasks in Documents/battery and Documents/my-experiments,
+## lets the experimenter set participant code, language and response mode,
+## and writes the choice to gPEBLiOSRequestFile.  When this script returns,
+## the app runs the chosen task and then starts this launcher again.
+##
+## Globals provided by the app:
+##   gPEBLBatteryPath, gPEBLDocumentsPath, gPEBLiOSRequestFile,
+##   gPEBLiOSDeviceLanguage, gPEBLiOSMessage ("KIND|script|detail" after a run)
+##
+## This file is part of PEBL (GPL 2).
+
+define Start(p)
+{
+    gSleepEasy <- 1
+    gW <- gVideoWidth
+    gH <- gVideoHeight
+    gWin <- MakeWindow("black")
+    gScreen <- []
+
+    gColBg     <- MakeColorRGB(28, 30, 36)
+    gColPanel  <- MakeColorRGB(48, 52, 62)
+    gColTask   <- MakeColorRGB(46, 84, 140)
+    gColMine   <- MakeColorRGB(110, 70, 140)
+    gColGo     <- MakeColorRGB(30, 140, 70)
+    gColWarn   <- MakeColorRGB(170, 60, 50)
+    gColText   <- MakeColorRGB(240, 240, 240)
+    gColDim    <- MakeColorRGB(170, 175, 185)
+    gColOk     <- MakeColorRGB(120, 210, 140)
+    gColBad    <- MakeColorRGB(250, 130, 120)
+
+    gSettingsFile <- gPEBLDocumentsPath + "logs/launcher-settings.txt"
+    gLanguages <- ["it", "en", "es", "fr", "de", "pt", "nl", "pl", "ru", "tr", "zh", "ja", "ko", "ar", "he"]
+
+    gSubCode <- ReadSetting("subnum", "1")
+    gLang    <- ReadSetting("language", gPEBLiOSDeviceLanguage)
+    gTouch   <- ToNumber(ReadSetting("touch", "1"))
+    gPage    <- ToNumber(ReadSetting("page", "1"))
+
+    SetupText()
+
+    gTasks <- FindTasks()
+
+    gStatus <- ""
+    if(VariableExists("gPEBLiOSMessage"))
+    {
+        gStatus <- gPEBLiOSMessage
+    }
+
+    started <- 0
+    while(not started)
+    {
+        choice <- MainScreen()
+        if(choice > 0)
+        {
+            started <- TaskScreen(Nth(gTasks, choice))
+        }
+    }
+
+    ClearScreen()
+    Draw()
+    return(0)
+}
+
+
+##----------------------------------------------------------------------
+## Screens
+##----------------------------------------------------------------------
+
+## Shows the task grid.  Returns the index of the chosen task, or 0 when
+## only a setting changed (the screen is then redrawn by the caller).
+define MainScreen()
+{
+    ClearScreen()
+    Background()
+
+    MakeText("PEBL", 70, 38, 34, gColText, gColBg, 1)
+    MakeText(GetPEBLVersion() + " - iPad", gW - 170, 38, 16, gColDim, gColBg, 0)
+    ShowStatus(80)
+
+    ## Settings row
+    bw <- Round((gW - 80) / 3) - 10
+    subBtn   <- MakeTouchButton(gTxt.participant + ": " + gSubCode, 40 + bw/2, 130, bw, 56, gColPanel, 22)
+    langBtn  <- MakeTouchButton(gTxt.language + ": " + Uppercase(gLang), gW/2, 130, bw, 56, gColPanel, 22)
+    modeText <- gTxt.touchmode
+    if(not gTouch)
+    {
+        modeText <- gTxt.keyboardmode
+    }
+    modeBtn  <- MakeTouchButton(modeText, gW - 40 - bw/2, 130, bw, 56, gColPanel, 22)
+
+    ## Task grid
+    cols <- 4
+    top <- 180
+    cellH <- 74
+    rows <- Floor((gH - top - 90) / cellH)
+    if(rows < 1)
+    {
+        rows <- 1
+    }
+    perPage <- rows * cols
+    nTasks <- Length(gTasks)
+    nPages <- Ceiling(nTasks / perPage)
+    if(nPages < 1)
+    {
+        nPages <- 1
+    }
+    if(gPage > nPages)
+    {
+        gPage <- nPages
+    }
+    if(gPage < 1)
+    {
+        gPage <- 1
+    }
+
+    cellW <- Round((gW - 80) / cols)
+    taskButtons <- []
+    taskIndex <- []
+    firstIdx <- (gPage - 1) * perPage + 1
+    lastIdx <- firstIdx + perPage - 1
+    if(lastIdx > nTasks)
+    {
+        lastIdx <- nTasks
+    }
+
+    if(nTasks == 0)
+    {
+        MakeText(gTxt.notasks, gW/2, gH/2, 22, gColBad, gColBg, 0)
+    } else {
+        i <- firstIdx
+        while(i <= lastIdx)
+        {
+            task <- Nth(gTasks, i)
+            slot <- i - firstIdx
+            col <- Mod(slot, cols)
+            row <- Floor(slot / cols)
+            x <- 40 + col * cellW + cellW/2
+            y <- top + row * cellH + cellH/2
+            fill <- gColTask
+            if(Fourth(task))
+            {
+                fill <- gColMine
+            }
+            b <- MakeTouchButton(First(task), x, y, cellW - 12, cellH - 12, fill, 20)
+            taskButtons <- Append(taskButtons, b)
+            taskIndex <- Append(taskIndex, i)
+            i <- i + 1
+        }
+    }
+
+    ## Bottom row
+    by <- gH - 45
+    prevBtn <- MakeTouchButton("<", 80, by, 100, 60, gColPanel, 30)
+    nextBtn <- MakeTouchButton(">", 200, by, 100, 60, gColPanel, 30)
+    MakeText(gTxt.page + " " + gPage + " / " + nPages + "   (" + nTasks + " " + gTxt.tasks + ")",
+             gW/2, by, 18, gColDim, gColBg, 0)
+    helpBtn <- MakeTouchButton(gTxt.help, gW - 110, by, 160, 60, gColPanel, 22)
+
+    Draw()
+
+    result <- -1
+    while(result < 0)
+    {
+        pos <- WaitTap()
+        if(InButton(pos, subBtn))
+        {
+            EditSubject()
+            result <- 0
+        } elseif(InButton(pos, langBtn)) {
+            gLang <- NextLanguage(gLang)
+            SaveSettings()
+            result <- 0
+        } elseif(InButton(pos, modeBtn)) {
+            gTouch <- 1 - gTouch
+            SaveSettings()
+            result <- 0
+        } elseif(InButton(pos, prevBtn)) {
+            if(gPage > 1)
+            {
+                gPage <- gPage - 1
+                SaveSettings()
+                result <- 0
+            }
+        } elseif(InButton(pos, nextBtn)) {
+            if(gPage < nPages)
+            {
+                gPage <- gPage + 1
+                SaveSettings()
+                result <- 0
+            }
+        } elseif(InButton(pos, helpBtn)) {
+            HelpScreen()
+            result <- 0
+        } else {
+            k <- 1
+            loop(b, taskButtons)
+            {
+                if(result < 0)
+                {
+                    if(InButton(pos, b))
+                    {
+                        result <- Nth(taskIndex, k)
+                    }
+                }
+                k <- k + 1
+            }
+        }
+    }
+
+    return(result)
+}
+
+
+## Details of one task.  Returns 1 if the task was started, 0 for "back".
+define TaskScreen(task)
+{
+    name <- First(task)
+    dir <- Second(task)
+    scripts <- Third(task)
+    params <- FindParamFiles(dir)
+
+    scriptIdx <- 1
+    paramIdx <- 0
+    i <- 1
+    loop(s, scripts)
+    {
+        ## Prefer the script named like its folder (e.g. flanker/flanker.pbl)
+        if(s == name + ".pbl")
+        {
+            scriptIdx <- i
+        }
+        i <- i + 1
+    }
+
+    result <- -1
+    while(result < 0)
+    {
+        script <- Nth(scripts, scriptIdx)
+
+        ClearScreen()
+        Background()
+        MakeText(name, gW/2, 40, 32, gColText, gColBg, 1)
+        MakeText(gTxt.participant + ": " + gSubCode + "     " + gTxt.language + ": " + Uppercase(gLang),
+                 gW/2, 80, 18, gColDim, gColBg, 0)
+
+        about <- ReadAbout(dir + script + ".about.txt")
+        tb <- EasyTextBox(about, 40, 110, gWin, 17, gW - 80, gH - 330)
+        gScreen <- Append(gScreen, tb)
+
+        y1 <- gH - 190
+        bw <- Round((gW - 100) / 2)
+        scriptLabel <- gTxt.script + ": " + script
+        if(Length(scripts) > 1)
+        {
+            scriptLabel <- scriptLabel + "  (" + scriptIdx + "/" + Length(scripts) + ")"
+        }
+        scriptBtn <- MakeTouchButton(scriptLabel, 40 + bw/2, y1, bw, 60, gColPanel, 20)
+
+        paramLabel <- gTxt.params + ": " + gTxt.defaults
+        if(paramIdx > 0)
+        {
+            paramLabel <- gTxt.params + ": " + Nth(params, paramIdx)
+        }
+        paramBtn <- MakeTouchButton(paramLabel, gW - 40 - bw/2, y1, bw, 60, gColPanel, 20)
+
+        y2 <- gH - 90
+        backBtn <- MakeTouchButton(gTxt.back, 140, y2, 200, 90, gColPanel, 26)
+        goBtn   <- MakeTouchButton(gTxt.start, gW/2 + 110, y2, gW - 400, 90, gColGo, 32)
+
+        Draw()
+
+        pos <- WaitTap()
+        if(InButton(pos, backBtn))
+        {
+            result <- 0
+        } elseif(InButton(pos, scriptBtn)) {
+            scriptIdx <- scriptIdx + 1
+            if(scriptIdx > Length(scripts))
+            {
+                scriptIdx <- 1
+            }
+        } elseif(InButton(pos, paramBtn)) {
+            paramIdx <- paramIdx + 1
+            if(paramIdx > Length(params))
+            {
+                paramIdx <- 0
+            }
+        } elseif(InButton(pos, goBtn)) {
+            pfile <- ""
+            if(paramIdx > 0)
+            {
+                pfile <- Nth(params, paramIdx)
+            }
+            WriteRequest(dir + script, pfile)
+            result <- 1
+        }
+    }
+
+    return(result)
+}
+
+
+define HelpScreen()
+{
+    ClearScreen()
+    Background()
+    MakeText(gTxt.help, gW/2, 40, 32, gColText, gColBg, 1)
+    tb <- EasyTextBox(gTxt.helptext, 40, 90, gWin, 18, gW - 80, gH - 200)
+    gScreen <- Append(gScreen, tb)
+    okBtn <- MakeTouchButton("OK", gW/2, gH - 60, 240, 80, gColGo, 30)
+    Draw()
+
+    waiting <- 1
+    while(waiting)
+    {
+        pos <- WaitTap()
+        if(InButton(pos, okBtn))
+        {
+            waiting <- 0
+        }
+    }
+    return(0)
+}
+
+
+define EditSubject()
+{
+    ClearScreen()
+    Background()
+    MakeText(gTxt.entercode, gW/2, 70, 30, gColText, gColBg, 1)
+    MakeText(gTxt.pressreturn, gW/2, 115, 18, gColDim, gColBg, 0)
+
+    font <- MakeFont(gPEBLBaseFont, 0, 40, MakeColor("black"), MakeColor("white"), 1)
+    box <- MakeTextBox(gSubCode, font, 520, 70)
+    AddObject(box, gWin)
+    Move(box, gW/2 - 260, 150)
+    gScreen <- Append(gScreen, box)
+    Draw()
+
+    input <- GetInput(box, "<return>")
+    input <- StripSpace(input)
+    if(input != "")
+    {
+        gSubCode <- input
+    }
+    SaveSettings()
+    return(0)
+}
+
+
+##----------------------------------------------------------------------
+## Task discovery
+##----------------------------------------------------------------------
+
+## Returns a list of [name, directory/, [scripts], isMine]
+define FindTasks()
+{
+    tasks <- []
+    roots <- [[gPEBLBatteryPath, 0], [gPEBLDocumentsPath + "my-experiments/", 1]]
+    loop(root, roots)
+    {
+        base <- First(root)
+        if(FileExists(base))
+        {
+            names <- SortNoCase(GetDirectoryListing(base))
+            loop(n, names)
+            {
+                if(n != "." and n != ".." and n != "data")
+                {
+                    if(IsDirectory(base + n))
+                    {
+                        scripts <- FindScripts(base + n + "/")
+                        if(Length(scripts) > 0)
+                        {
+                            tasks <- Append(tasks, [n, base + n + "/", scripts, Second(root)])
+                        }
+                    }
+                }
+            }
+        }
+    }
+    return(tasks)
+}
+
+
+define FindScripts(dir)
+{
+    out <- []
+    names <- SortNoCase(GetDirectoryListing(dir))
+    loop(n, names)
+    {
+        if(EndsWith(n, ".pbl"))
+        {
+            out <- Append(out, n)
+        }
+    }
+    return(out)
+}
+
+
+define FindParamFiles(dir)
+{
+    out <- []
+    pdir <- dir + "params/"
+    if(FileExists(pdir))
+    {
+        names <- SortNoCase(GetDirectoryListing(pdir))
+        loop(n, names)
+        {
+            if(EndsWith(n, ".par.json"))
+            {
+                out <- Append(out, n)
+            }
+        }
+    }
+    return(out)
+}
+
+
+define ReadAbout(file)
+{
+    text <- gTxt.noabout
+    if(FileExists(file))
+    {
+        text <- FileReadText(file)
+        if(StringLength(text) > 2500)
+        {
+            text <- SubString(text, 1, 2500) + " ..."
+        }
+    }
+    return(text)
+}
+
+
+##----------------------------------------------------------------------
+## Request and settings files
+##----------------------------------------------------------------------
+
+define WriteRequest(script, pfile)
+{
+    f <- FileOpenOverwrite(gPEBLiOSRequestFile)
+    FilePrint(f, "script=" + script)
+    FilePrint(f, "subnum=" + gSubCode)
+    FilePrint(f, "language=" + gLang)
+    FilePrint(f, "pfile=" + pfile)
+    FilePrint(f, "touch=" + gTouch)
+    FileClose(f)
+    SaveSettings()
+    return(1)
+}
+
+
+define SaveSettings()
+{
+    f <- FileOpenOverwrite(gSettingsFile)
+    FilePrint(f, "subnum=" + gSubCode)
+    FilePrint(f, "language=" + gLang)
+    FilePrint(f, "touch=" + gTouch)
+    FilePrint(f, "page=" + gPage)
+    FileClose(f)
+    return(1)
+}
+
+
+define ReadSetting(key, default)
+{
+    result <- default
+    if(FileExists(gSettingsFile))
+    {
+        f <- FileOpenRead(gSettingsFile)
+        while(not EndOfFile(f))
+        {
+            line <- FileReadLine(f)
+            n <- StringLength(line)
+            pos <- FindInString(line, "=", 1)
+            if(pos > 1 and pos < n)
+            {
+                k <- SubString(line, 1, pos - 1)
+                if(k == key)
+                {
+                    result <- SubString(line, pos + 1, n - pos)
+                }
+            }
+        }
+        FileClose(f)
+    }
+    return(result)
+}
+
+
+##----------------------------------------------------------------------
+## Drawing helpers
+##----------------------------------------------------------------------
+
+define Background()
+{
+    bg <- Rectangle(gW/2, gH/2, gW, gH, gColBg, 1)
+    AddObject(bg, gWin)
+    gScreen <- Append(gScreen, bg)
+    return(bg)
+}
+
+
+define ClearScreen()
+{
+    loop(o, gScreen)
+    {
+        RemoveObject(o, gWin)
+    }
+    gScreen <- []
+    return(0)
+}
+
+
+define MakeText(text, x, y, size, fg, bg, bold)
+{
+    font <- MakeFont(gPEBLBaseFont, bold, size, fg, bg, 1)
+    lab <- MakeLabel(text + "", font)
+    AddObject(lab, gWin)
+    Move(lab, x, y)
+    gScreen <- Append(gScreen, lab)
+    return(lab)
+}
+
+
+define MakeTouchButton(text, x, y, w, h, fill, size)
+{
+    b <- MakeCustomObject("touchbutton")
+    rect <- Rectangle(x, y, w, h, fill, 1)
+    AddObject(rect, gWin)
+    gScreen <- Append(gScreen, rect)
+    lab <- MakeText(text, x, y, size, gColText, fill, 0)
+    if(lab.width > (w - 16))
+    {
+        lab.zoomX <- (w - 16) / lab.width
+    }
+    b.cx <- x
+    b.cy <- y
+    b.w <- w
+    b.h <- h
+    return(b)
+}
+
+
+define InButton(pos, b)
+{
+    x <- First(pos)
+    y <- Second(pos)
+    result <- (x >= (b.cx - b.w/2)) and (x <= (b.cx + b.w/2)) and (y >= (b.cy - b.h/2)) and (y <= (b.cy + b.h/2))
+    return(result)
+}
+
+
+define WaitTap()
+{
+    pos <- [0, 0]
+    waiting <- 1
+    while(waiting)
+    {
+        ev <- WaitForMouseButton()
+        if(Nth(ev, 4) == "<pressed>")
+        {
+            pos <- [First(ev), Second(ev)]
+            waiting <- 0
+        }
+    }
+    return(pos)
+}
+
+
+## Shows the outcome of the last run ("KIND|script|detail")
+define ShowStatus(y)
+{
+    if(gStatus != "")
+    {
+        parts <- SplitString(gStatus, "|")
+        kind <- First(parts)
+        script <- ""
+        detail <- ""
+        if(Length(parts) > 1)
+        {
+            script <- Second(parts)
+        }
+        if(Length(parts) > 2)
+        {
+            detail <- Third(parts)
+        }
+
+        if(kind == "DONE")
+        {
+            lab <- MakeText(gTxt.done + ": " + script, gW/2, y, 20, gColOk, gColBg, 1)
+        } elseif(kind == "STOPPED") {
+            lab <- MakeText(gTxt.stopped + ": " + script + " - " + detail, gW/2, y, 18, gColDim, gColBg, 0)
+        } else {
+            lab <- MakeText(gTxt.error + " (" + script + "): " + detail, gW/2, y, 16, gColBad, gColBg, 0)
+        }
+        if(lab.width > (gW - 40))
+        {
+            lab.zoomX <- (gW - 40) / lab.width
+        }
+    }
+    return(0)
+}
+
+
+##----------------------------------------------------------------------
+## Small utilities
+##----------------------------------------------------------------------
+
+define EndsWith(str, suffix)
+{
+    result <- 0
+    n <- StringLength(str)
+    m <- StringLength(suffix)
+    if(n > m)
+    {
+        if(FindInString(str, suffix, n - m + 1) == (n - m + 1))
+        {
+            result <- 1
+        }
+    }
+    return(result)
+}
+
+
+define SortNoCase(list)
+{
+    keys <- []
+    loop(i, list)
+    {
+        keys <- Append(keys, Lowercase(i + ""))
+    }
+    return(SortBy(list, keys))
+}
+
+
+define NextLanguage(lang)
+{
+    result <- First(gLanguages)
+    i <- 1
+    found <- 0
+    loop(l, gLanguages)
+    {
+        if(l == lang)
+        {
+            found <- i
+        }
+        i <- i + 1
+    }
+    if(found > 0 and found < Length(gLanguages))
+    {
+        result <- Nth(gLanguages, found + 1)
+    }
+    return(result)
+}
+
+
+define SetupText()
+{
+    gTxt <- MakeCustomObject("text")
+    if(gPEBLiOSDeviceLanguage == "it")
+    {
+        gTxt.participant <- "Partecipante"
+        gTxt.language <- "Lingua"
+        gTxt.touchmode <- "Risposte: touch"
+        gTxt.keyboardmode <- "Risposte: tastiera"
+        gTxt.page <- "Pagina"
+        gTxt.tasks <- "test"
+        gTxt.help <- "Aiuto"
+        gTxt.notasks <- "Nessun test trovato in Documenti/battery."
+        gTxt.script <- "Script"
+        gTxt.params <- "Parametri"
+        gTxt.defaults <- "predefiniti"
+        gTxt.back <- "Indietro"
+        gTxt.start <- "AVVIA"
+        gTxt.entercode <- "Codice partecipante"
+        gTxt.pressreturn <- "Scrivi il codice e premi Invio sulla tastiera"
+        gTxt.noabout <- "Nessuna descrizione disponibile per questo test."
+        gTxt.done <- "Test completato"
+        gTxt.stopped <- "Test interrotto"
+        gTxt.error <- "Errore"
+        gTxt.helptext <- "PEBL per iPad" + CR(2) +
+          "- Tocca un test per vederne la descrizione, poi AVVIA." + CR(1) +
+          "- I dati vengono salvati nella cartella data/ di ogni test. Aprili dall'app File: Sul mio iPad > PEBL > battery > <test> > data." + CR(1) +
+          "- Per interrompere un test: tieni QUATTRO dita sullo schermo per 2 secondi." + CR(1) +
+          "- Tastiera a schermo: tocca con TRE dita." + CR(1) +
+          "- Risposte touch: i test che chiedono tasti (es. barra spaziatrice o Shift) usano invece tocchi o pulsanti a schermo. Con una tastiera esterna scegli 'Risposte: tastiera'." + CR(1) +
+          "- I file di parametri (.par.json) vanno nella cartella params/ del test." + CR(1) +
+          "- I tuoi esperimenti: copiali in Documenti/my-experiments/<nome>/<nome>.pbl." + CR(1) +
+          "- Per esperimenti con tempi di reazione attiva Accesso guidato (Impostazioni > Accessibilita') e modalita' aereo." + CR(1) +
+          "- Il registro dell'ultima sessione e' in Documenti/logs/pebl-log.txt."
+    } else {
+        gTxt.participant <- "Participant"
+        gTxt.language <- "Language"
+        gTxt.touchmode <- "Responses: touch"
+        gTxt.keyboardmode <- "Responses: keyboard"
+        gTxt.page <- "Page"
+        gTxt.tasks <- "tasks"
+        gTxt.help <- "Help"
+        gTxt.notasks <- "No tasks found in Documents/battery."
+        gTxt.script <- "Script"
+        gTxt.params <- "Parameters"
+        gTxt.defaults <- "defaults"
+        gTxt.back <- "Back"
+        gTxt.start <- "START"
+        gTxt.entercode <- "Participant code"
+        gTxt.pressreturn <- "Type the code and press Return on the keyboard"
+        gTxt.noabout <- "No description available for this task."
+        gTxt.done <- "Task finished"
+        gTxt.stopped <- "Task stopped"
+        gTxt.error <- "Error"
+        gTxt.helptext <- "PEBL for iPad" + CR(2) +
+          "- Tap a task to see its description, then START." + CR(1) +
+          "- Data are saved in each task's data/ folder. Open them in the Files app: On My iPad > PEBL > battery > <task> > data." + CR(1) +
+          "- To stop a task: hold FOUR fingers on the screen for 2 seconds." + CR(1) +
+          "- On-screen keyboard: tap with THREE fingers." + CR(1) +
+          "- Touch responses: tasks asking for keys (e.g. space bar or Shift) use taps or on-screen buttons instead. With a hardware keyboard choose 'Responses: keyboard'." + CR(1) +
+          "- Parameter files (.par.json) go in the task's params/ folder." + CR(1) +
+          "- Your own experiments: copy them to Documents/my-experiments/<name>/<name>.pbl." + CR(1) +
+          "- For reaction-time studies enable Guided Access (Settings > Accessibility) and airplane mode." + CR(1) +
+          "- The log of the last session is in Documents/logs/pebl-log.txt."
+    }
+    return(gTxt)
+}

@@ -32,6 +32,9 @@
 #include "../../utility/PError.h"
 #include "SDL.h"
 #include "SDL_mouse.h"
+#ifdef PEBL_IOS
+#include "../ios/PEBLiOS.h"
+#endif
 #ifdef PEBL_MOVIES
 #include "WAAVE.h"
 #endif
@@ -81,9 +84,15 @@ void PlatformEventQueue::Prime()
 	//Get the next event in the queue. SDL_PollEvent returns 0
     //when there are no pending events available.
 
+#ifdef PEBL_IOS
+    //A four-finger hold produces no further events while it is held,
+    //so check its duration every time the queue is primed.
+    PEBLiOS::CheckAbortGesture();
+#endif
+
     while(SDL_PollEvent(&test_event))
     //while(SDL_WaitEvent(&test_event))
-    
+
         {
 
             if(((int)(test_event.type))==1024)
@@ -110,6 +119,16 @@ void PlatformEventQueue::Prime()
             
             #endif
             
+#ifdef PEBL_IOS
+            //Touch gestures that replace keyboard shortcuts on iPad:
+            //three-finger tap toggles the on-screen keyboard; holding four
+            //fingers on the screen aborts the script (like ctrl-alt-shift-\).
+            if(test_event.type == SDL_FINGERDOWN || test_event.type == SDL_FINGERUP)
+                {
+                    PEBLiOS::HandleFingerEvent(test_event);
+                }
+#endif
+
             //first, check to see if the event is the 'magic' abort event:
             //ctrl-alt-shift-X.
 

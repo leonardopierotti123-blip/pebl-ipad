@@ -48,6 +48,8 @@ using std::cout;
 #ifdef PEBL_OSX
 #include <mach-o/dyld.h>	/* _NSGetExecutablePath */
 #include <CoreFoundation/CFBundle.h>
+#elif defined(PEBL_IOS)
+#include "../platforms/ios/PEBLiOS.h"
 #elif defined(PEBL_WIN32)
 #include <windows.h>
 #endif
@@ -148,6 +150,42 @@ void PEBLPath::Initialize(std::list<std::string> files)
 
     //library functions
     AddToPathList(MergePathAndFile(basedir, "pebl-lib/"));
+
+#elif defined (PEBL_IOS)
+
+    //On iOS, read-only resources (media/, pebl-lib/) live inside the .app
+    //bundle; the battery and all data live in the app's Documents folder,
+    //which is the working directory while a script runs.
+    mPathList.clear();
+
+    AddToPathList("./");
+    //absolute pathnames
+    AddToPathList("");
+
+    //The directories of each script on the command-line.
+    string tmp;
+    std::list<string>::iterator i=files.begin();
+    i++;  //skip over the command name.
+    while(i != files.end())
+        {
+            tmp = PEBLUtility::StripFile(*i);
+            if(tmp != "")
+                {
+                    AddToPathList(tmp);
+                }
+            i++;
+        }
+
+    string basedir = PEBLiOS::GetResourcePath() + "/";
+
+    AddToPathList(MergePathAndFile(basedir, "media/fonts/"));
+    AddToPathList(MergePathAndFile(basedir, "media/sounds/"));
+    AddToPathList(MergePathAndFile(basedir, "media/images/"));
+    AddToPathList(MergePathAndFile(basedir, "media/text/"));
+    AddToPathList(MergePathAndFile(basedir, "media/css/"));
+    AddToPathList(MergePathAndFile(basedir, "media/settings/"));
+    AddToPathList(MergePathAndFile(basedir, "pebl-lib/"));
+
 #elif defined (PEBL_EMSCRIPTEN)
 
 

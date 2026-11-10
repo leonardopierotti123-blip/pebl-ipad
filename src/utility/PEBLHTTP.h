@@ -31,6 +31,7 @@
 #define PEBL_HAPPY 1
 #define PEBL_CURL 2
 #define PEBL_FETCH 3
+#define PEBL_NSURL 4   // iOS: NSURLSession (utility/PEBLHTTP_ios.mm)
 
 // HTTP_LIB is defined in the Makefile via compiler flags:
 // -DHTTP_LIB=2 (PEBL_CURL) for Linux native builds

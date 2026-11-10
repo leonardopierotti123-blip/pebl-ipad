@@ -171,11 +171,12 @@ int PlatformTimer::GetState(int iface) const
 void PlatformTimer::GetTimeOfDay(unsigned long & secs, unsigned long & msecs)
 {
 #if defined( PEBL_UNIX) || defined(PEBL_EMSCRIPTEN)
-      struct timeval * tp=NULL;
-       gettimeofday(tp,NULL);
+      //(previously passed a NULL timeval pointer and dereferenced it)
+      struct timeval tv;
+       gettimeofday(&tv,NULL);
 
-       time_t        secs1 = tp->tv_sec;
-       suseconds_t usecs  = tp->tv_usec;
+       time_t        secs1 = tv.tv_sec;
+       suseconds_t usecs  = tv.tv_usec;
 
     secs = secs1;
     msecs = usecs/100;

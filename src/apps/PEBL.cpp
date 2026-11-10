@@ -220,6 +220,12 @@ PCallStack Evaluator::gCallStack;
 Loader* myLoader;
 PNode * head;
 
+#ifdef PEBL_IOS
+#include "../platforms/ios/PEBLiOS.h"
+int  PEBLiOSRunLoop(int argc, char *argv[]);
+void PEBLiOSCleanupScript();
+#endif
+
 //std::list<PNode> PError::gCallStack;
 
 
@@ -237,7 +243,7 @@ int PEBLInterpret( int argc, std::vector<std::string> argv )
    std::cerr << "**************Starting PEBLInterpret\n";
    std::cerr << "**************argc:" << argc << endl;
 
-#if defined(PEBL_UNIX) and not defined(PEBL_OSX)
+#if defined(PEBL_UNIX) and not defined(PEBL_OSX) and not defined(PEBL_IOS)
     if(argc==2 && strcmp(argv[1].c_str(), "--install")==0)
         {
             string basedir;
@@ -880,6 +886,12 @@ int PEBLInterpret( int argc, std::vector<std::string> argv )
             SignalTestComplete(completionStatus, scriptReturnCode);
 
             return scriptReturnCode;
+#elif defined(PEBL_IOS)
+            // iOS: tear down this script but keep the process (and SDL)
+            // alive, so the launcher can run the next one.
+            v = 0;
+            PEBLiOSCleanupScript();
+            return scriptReturnCode;
 #else
             // Native platforms: Perform full cleanup
             // IMPORTANT: Delete myEval FIRST to clean up local variables (child widgets)
@@ -922,7 +934,11 @@ int PEBLInterpret( int argc, std::vector<std::string> argv )
         {
             cerr << "Error: Can't evaluate program" << endl;
 
+#ifdef PEBL_IOS
+            PEBLiOSCleanupScript();
+#else
             if(myLoader) delete myLoader;
+#endif
             return 1;
 
         }
@@ -1019,7 +1035,13 @@ int main(int argc,  char *argv[])
 
 //Put code here that runs on only one of the platforms
 
-#if defined(PEBL_OSX)
+#if defined(PEBL_IOS)
+
+    //iOS has no command line and an app may not quit itself: run the
+    //touch launcher and the selected scripts in a loop, forever.
+    return PEBLiOSRunLoop(argc, argv);
+
+#elif defined(PEBL_OSX)
 
     //Find the location of the app bundle; save it to global variables etc.:
     CFBundleRef mainBundle = CFBundleGetMainBundle();

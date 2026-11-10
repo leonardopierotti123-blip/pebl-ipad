@@ -1000,6 +1000,19 @@ define DetermineResponseMode(params, config, modes, win)
         modeName <- GetPlatformResponseMode(modes)
     }
 
+    ## iPad touch mode: replace keyboard/right-click modes by touch equivalents
+    iosSemantic <- 0
+    if(GetSystemType() == "IOS")
+    {
+        iosMode <- MapResponseModeForIOS(modeName, modes)
+        if(iosMode != modeName)
+        {
+            ## keep the task's own response meanings (e.g. "same"/"different")
+            iosSemantic <- GetProperty(GetProperty(modes, modeName), "semantic")
+            modeName <- iosMode
+        }
+    }
+
     ## Handle userselect mode - let user pick their own keys
     if(modeName == "userselect")
     {
@@ -1035,6 +1048,11 @@ define DetermineResponseMode(params, config, modes, win)
         else
         {
             SignalFatalError("Unknown response mode: " + modeName)
+        }
+
+        if(IsList(iosSemantic))
+        {
+            result.semantic <- iosSemantic
         }
 
         ## Apply custom overrides if provided
@@ -1208,6 +1226,48 @@ define GetCannedSemantics(label)
 }
 
 
+define MapResponseModeForIOS(modeName, modes)
+{
+    ## On iPad (GetSystemType() == "IOS") with touch mode on (the default;
+    ## the iPad launcher sets gPEBLiOSTouchMode), keyboard and mouse-button
+    ## modes are replaced by touch modes with the same number of responses:
+    ##   1 response  -> "touchscreen" (tap anywhere)
+    ##   2 responses -> "touchtarget" (two on-screen buttons)
+    ## Modes with more responses (arrows, numbers) keep the keyboard; use a
+    ## hardware keyboard or the on-screen keyboard (three-finger tap).
+
+    result <- modeName
+    touch <- 1
+    if(VariableExists("gPEBLiOSTouchMode"))
+    {
+        touch <- gPEBLiOSTouchMode
+    }
+
+    if(touch)
+    {
+        if(PropertyExists(modes, modeName))
+        {
+            mode <- GetProperty(modes, modeName)
+            if(PropertyExists(mode, "type") and PropertyExists(mode, "semantic"))
+            {
+                if(mode.type == "keyboard" or mode.type == "singlekey" or mode.type == "mousebutton")
+                {
+                    n <- Length(mode.semantic)
+                    if(n == 1 and PropertyExists(modes, "touchscreen"))
+                    {
+                        result <- "touchscreen"
+                    } elseif(n == 2 and PropertyExists(modes, "touchtarget")) {
+                        result <- "touchtarget"
+                    }
+                }
+            }
+        }
+    }
+
+    return(result)
+}
+
+
 define GetPlatformResponseMode(modes)
 {
     ## Returns appropriate response mode for current platform
@@ -1219,6 +1279,14 @@ define GetPlatformResponseMode(modes)
     if(GetSystemType() == "EMSCRIPTEN")
     {
         result <- "keyboardSafe"
+    }
+
+    ## iPad: no physical keyboard can be assumed, so respond by touching
+    ## on-screen targets.  Set responsemode explicitly in the parameters
+    ## (e.g. keyboardShift) when a hardware keyboard is used.
+    if(GetSystemType() == "IOS")
+    {
+        result <- "mousetarget"
     }
 
     return(result)

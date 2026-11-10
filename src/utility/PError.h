@@ -33,6 +33,25 @@
 #include "../base/Variant.h"
 #include "../base/PNode.h"
 
+#ifdef PEBL_IOS
+#include <stdexcept>
+/// On iOS an app may not terminate itself, and the launcher runs in the
+/// same process as the scripts.  Fatal errors, ExitQuietly() and the abort
+/// gesture therefore unwind to the iOS run loop (apps/PEBL.cpp) with this
+/// exception instead of calling exit().
+class PEBLScriptExit : public std::runtime_error
+{
+public:
+    PEBLScriptExit(const std::string & message, int code, bool isError)
+        : std::runtime_error(message), mCode(code), mIsError(isError) {}
+    int GetCode() const { return mCode; }
+    bool IsError() const { return mIsError; }
+private:
+    int mCode;
+    bool mIsError;
+};
+#endif
+
 enum PErrorAssertType
     {
         //These are based on variant types:

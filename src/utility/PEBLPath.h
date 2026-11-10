@@ -54,6 +54,10 @@ public:
     void AddToPathList(const string & s);
     std::string FindFile(const string &  filename);
 
+    ///Removes every search path.  Used when several scripts are run one
+    ///after another in the same process (iOS launcher loop).
+    void Clear(){mPathList.clear();}
+
     const string  MergePathAndFile(const string &  path, const string & file);
     bool IsDirectory(const string & pathname);
 

@@ -106,6 +106,10 @@ void PError::SignalFatalError(const string & message)
             throw std::runtime_error(errorMessage.GetString());
         }
 
+#ifdef PEBL_IOS
+    throw PEBLScriptExit(errorMessage.GetString(), 1, true);
+#endif
+
     raise(SIGTERM);
     exit(1);  // Exit with error code 1 for fatal errors
 #ifdef PEBL_EMSCRIPTEN
@@ -116,16 +120,31 @@ void PError::SignalFatalError(const string & message)
 }
  
 
+#ifdef PEBL_IOS
+/// Called by the bison/flex parser (grammar.y) instead of exit() on iOS.
+void PEBLParseFailed(const char * message)
+{
+    throw PEBLScriptExit(std::string(message), 1, true);
+}
+#endif
+
+
 void PError::SignalWarning(const std::string &  message)
 {
     const PNode * node = Evaluator::gEvalNode;
-    cerr << "Non-fatal Warning in line " << node->GetLineNumber() <<   " of file " << node->GetFilename()  << ":\n\t";
+    if(node)
+        cerr << "Non-fatal Warning in line " << node->GetLineNumber() <<   " of file " << node->GetFilename()  << ":\n\t";
+    else
+        cerr << "Non-fatal Warning:\n\t";
     cerr <<  message << endl;
 }
 
 void PError::ExitQuietly(const std::string & message, int exitCode)
 {
     cerr << message << endl;
+#ifdef PEBL_IOS
+    throw PEBLScriptExit(message, exitCode, false);
+#endif
     raise(SIGTERM);
     exit(exitCode);
 }

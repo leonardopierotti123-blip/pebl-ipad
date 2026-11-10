@@ -82,6 +82,10 @@
   PNode * parse(const char* filename);
   extern int yylineno;
   char* sourcefilename;
+#ifdef PEBL_IOS
+  void yyrestart(FILE * input_file);
+  void PEBLParseFailed(const char * message);  // defined in utility/PError.cpp
+#endif
 
 
 
@@ -3403,6 +3407,10 @@ void yyerror (const char *error)
 {
 
   std::cerr << "line " << yylineno << " of "<< sourcefilename<<": " << error << std::endl;
+#ifdef PEBL_IOS
+  PEBLParseFailed((std::string("Syntax error, line ") + std::to_string(yylineno) +
+                   " of " + sourcefilename + ": " + error).c_str());
+#endif
   exit(1);
 }
 
@@ -3423,10 +3431,18 @@ PNode * parse (const char* filename)
     if(!filein) 
 	{
 	    fprintf(stderr,"Could not open %s\n",filename);
+#ifdef PEBL_IOS
+	    PEBLParseFailed((std::string("Could not open ") + filename).c_str());
+#endif
 	    exit(1);
 	}
     fprintf(stderr,"File [%s] opened successfully.\n", filename);
     yyin=filein;
+#ifdef PEBL_IOS
+    //Scripts are parsed repeatedly in one process on iOS; discard any
+    //buffer left over from a previous (possibly aborted) parse.
+    yyrestart(filein);
+#endif
     
     //Set global filename indicator to current filename for use in error reporting.
     sourcefilename = strdup(filename);

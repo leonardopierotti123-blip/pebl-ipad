@@ -2349,6 +2349,8 @@ Variant PEBLEnvironment::GetSystemType(Variant v)
 {
 #if defined(PEBL_EMSCRIPTEN)
     Variant type = "EMSCRIPTEN";
+#elif defined(PEBL_IOS)
+    Variant type = "IOS";
 #elif defined(PEBL_OSX)
     Variant type = "OSX";
 #elif defined (PEBL_UNIX)
@@ -2454,7 +2456,11 @@ Variant PEBLEnvironment::SystemCallUpdate(Variant v)
 // Unix/Linux implementation - fork and return PID
 Variant PEBLEnvironment::SystemCallUpdate(Variant v)
 {
-#if defined(PEBL_UNIX)
+#if defined(PEBL_IOS)
+    //No child processes on iOS.
+    PError::SignalWarning("SystemCallUpdate is not available on iOS");
+    return Variant(-1);
+#elif defined(PEBL_UNIX)
     PList * plist = v.GetComplexData()->GetList();
 
     std::string call  = plist->Nth(1).GetString();
@@ -2504,7 +2510,9 @@ Variant PEBLEnvironment::CheckProcessStatus(Variant v)
     PList * plist = v.GetComplexData()->GetList();
     PError::AssertType(plist->First(), PEAT_INTEGER, "Argument error in function [CheckProcessStatus(<pid>)]: ");
 
-#if defined(PEBL_UNIX)
+#if defined(PEBL_IOS)
+    return Variant(-1);
+#elif defined(PEBL_UNIX)
     pid_t pid = (pid_t)(plist->First().GetInteger());
 
     int status;

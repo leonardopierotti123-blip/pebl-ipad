@@ -84,9 +84,13 @@
 #include <unistd.h>
 #include <sys/types.h>
 #include <pwd.h>
-#elif defined (PEBL_OSX)
+#elif defined (PEBL_OSX) || defined(PEBL_IOS)
 #include <unistd.h>
 #include <pwd.h>
+#endif
+
+#ifdef PEBL_IOS
+#include "../platforms/ios/PEBLiOS.h"
 #endif
 
 #include <unistd.h>
@@ -103,7 +107,7 @@
 //compilation--this should be available on linux/osx in
 //system libraries.  This is done for the mlock function,
 //which is used in the MD5File utility function here.
-#if defined(PEBL_LINUX) or defined(PEBL_OSX) or defined(PEBL_EMSCRIPTEN)
+#if defined(PEBL_LINUX) or defined(PEBL_OSX) or defined(PEBL_EMSCRIPTEN) or defined(PEBL_IOS)
 #include <sys/mman.h>
 #elif defined(PEBL_WIN32)
 #include "mman.h"
@@ -1041,6 +1045,12 @@ Variant PEBLUtility::GetHomeDirectory()
     {
         PError::SignalFatalError("Unable to find user's home directory!");
     }
+#elif defined(PEBL_IOS)
+
+  //The sandbox 'home' is not writable; Documents is what users can reach
+  //through the Files app, so treat it as home.
+  std::string path = PEBLiOS::GetDocumentsPath();
+
 #elif defined(PEBL_LINUX) or defined(PEBL_OSX)
 
   struct passwd *p=getpwuid(getuid());
@@ -1058,7 +1068,7 @@ Variant PEBLUtility::GetHomeDirectory()
 
 Variant PEBLUtility::GetWorkingDirectory()
 {
-#if defined(PEBL_WIN32) or  defined(PEBL_OSX)
+#if defined(PEBL_WIN32) or  defined(PEBL_OSX) or defined(PEBL_IOS)
     //maybe this will work given we compile with g++
 
     char *path=NULL;
@@ -1137,6 +1147,11 @@ Variant PEBLUtility::LaunchFile(std::string file)
 
        x = ((INT_PTR)hInst > 32);  //hInst returns an error code > 32 on success.
      }
+#elif defined(PEBL_IOS)
+
+    //Files and URLs are handed to iOS (Safari, Quick Look, ...).
+    x = PEBLiOS::OpenURLOrFile(file);
+
 #elif defined(PEBL_LINUX)
 
 
@@ -1161,7 +1176,13 @@ Variant PEBLUtility::SystemCall(std::string call, std::string args)
     //   cout << "Systemcalling inner\n";
 
 
-#if defined( PEBL_UNIX )
+#if defined( PEBL_IOS )
+
+    //iOS apps cannot spawn processes (system() is unavailable in the SDK).
+    std::cerr << "SystemCall is not available on iOS; ignoring [" << call << " " << args << "]\n";
+    int x = 1;   //non-zero, like a failed shell command
+
+#elif defined( PEBL_UNIX )
 
     std::string tmp = call + " " + args;
 
