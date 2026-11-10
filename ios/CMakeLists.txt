@@ -265,6 +265,7 @@ target_link_libraries(PEBL PRIVATE
     "-framework AudioToolbox"
     "-framework CoreAudio"
     "-framework CoreGraphics"
+    "-framework CoreText"          # HarfBuzz CoreText backend
     "-framework CoreHaptics"
     "-framework CoreMotion"
     "-framework GameController"

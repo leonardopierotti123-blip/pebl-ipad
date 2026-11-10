@@ -19,11 +19,15 @@
 //  Requests are synchronous, as the scripts expect.
 ////////////////////////////////////////////////////////////////////////////////
 
-#if defined(PEBL_IOS) && defined(PEBL_HTTP) && (HTTP_LIB == PEBL_NSURL)
+#ifdef PEBL_IOS
 
 #import <Foundation/Foundation.h>
 
-#include "PEBLHTTP.h"
+#include "PEBLHTTP.h"   //defines PEBL_NSURL, so test HTTP_LIB only after this
+
+#endif
+
+#if defined(PEBL_IOS) && defined(PEBL_HTTP) && (HTTP_LIB == PEBL_NSURL)
 #include "PError.h"
 #include "../base/PList.h"
 #include "../base/PComplexData.h"
