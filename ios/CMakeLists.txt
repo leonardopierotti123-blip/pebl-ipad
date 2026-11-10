@@ -41,6 +41,16 @@ set(SRC "${PEBL_ROOT}/src")
 include(FetchContent)
 set(FETCHCONTENT_QUIET OFF)
 
+# Vendored FreeType/HarfBuzz declare cmake_minimum_required() < 3.5, which
+# CMake 4 rejects unless a policy floor is given.
+set(CMAKE_POLICY_VERSION_MINIMUM 3.5)
+
+# Download dependencies directly instead of through per-dependency Xcode
+# sub-builds (much faster with the Xcode generator).
+if(POLICY CMP0168)
+    cmake_policy(SET CMP0168 NEW)
+endif()
+
 # SDL2
 set(SDL_SHARED OFF CACHE BOOL "" FORCE)
 set(SDL_STATIC ON CACHE BOOL "" FORCE)
